@@ -79,15 +79,28 @@ def variationalbound(unnormalised_posterior, num_samples, nbound, alpha,k):
         log_q = -0.5 * agnp.log(2 * math.pi * sigma) - 0.5 * (samples - mu) **2 / sigma
         return log_q
     
+    def log_prior(samples_q, v_prior=1.0):
+        log_p0 = -0.5 * agnp.log(2 * math.pi * v_prior) - 0.5 * samples_q **2 / v_prior
+        return agnp.sum(log_p0)
+    
     def bound(params, t):
         
+        # Q samples
         mu, sigma = unpack_params(params)
-        samples = agnpr.randn(num_samples) * sigma + mu
-        logp0, logfactor = unnormalised_posterior.unnorm_posterior_log(samples) 
-        logq = log_q(samples, mu, sigma)
+        samples = agnpr.randn(num_samples) * agnp.sqrt(sigma) + mu
+        
+        _, logfactor = unnormalised_posterior.unnorm_posterior_log(samples) 
+        v_noise = agnp.exp(agnp.log(1.0))
+        logp0 = log_prior(samples,1.0)
+        logq = log_q(samples, mu, v_noise)
         
         if nbound == 'Elbo':     
-            lower_bound =  -(agnp.mean(gaussian_entropy(sigma) + (logp0+ logfactor)))   
+# =============================================================================
+#             lower_bound =  -(agnp.mean(gaussian_entropy(sigma) + (logp0+ logfactor)))   
+# =============================================================================
+            KL = agnp.sum(-0.5 * agnp.log(2 * math.pi * v_noise) - 0.5 * (mu**2 + sigma) / v_noise) - \
+            agnp.sum(-0.5 * agnp.log(2 * math.pi * sigma * np.exp(1)))
+            lower_bound = -(agnp.mean(logfactor) + KL) #kl(mu, sigma))
       
         elif nbound == 'Renyi':            
             logF = logp0 + logfactor - logq 
@@ -102,7 +115,9 @@ def variationalbound(unnormalised_posterior, num_samples, nbound, alpha,k):
             logF =  logp0 + logfactor -logq  
             lower_bound = -agnp.max(logF)
             
+        wandb.log({'Alpha ' + str(k): alpha})
         wandb.log({'Bound ' + str(k): lower_bound._value})
+        
         return lower_bound
 
     gradient = grad(bound)
@@ -123,15 +138,11 @@ class variationalinference:
         self.gradient_samples = gradient_samples        
         self.alpha = alpha
                 
-    def get_posterior(self, obs, step_size=0.01, num_iters=50,k=0):
+    def get_posterior(self, obs, step_size=0.01, num_iters=50,k=0, alpha =1):
         unnorm_posterior = get_unnormalised_posterior(obs, self.prior_mu, self.prior_sigma, self.likelihood_sigma)
         variational_objective, gradient, unpack_params = variationalbound(unnorm_posterior, self.gradient_samples, self.bound, self.alpha,k)
         init_var_params = agnp.array([self.prior_mu, self.prior_sigma])
-        
-        variational_params = adam(gradient, init_var_params, step_size=step_size, num_iters=num_iters)
-        self.post_mu, self.post_sigma = variational_params[0], np.exp(variational_params[1])
 
-        return variational_params, norm_dist(self.post_mu, self.post_sigma)
-    
+        return init_var_params, gradient
     
     
