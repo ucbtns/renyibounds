@@ -103,8 +103,10 @@ def variationalbound(unnormalised_posterior, num_samples, nbound, alpha,k):
             lower_bound = -agnp.max(logF)
             
         wandb.log({'Bound ' + str(k): lower_bound._value})
+        
+        print(lower_bound)
         return lower_bound
-
+   
     gradient = grad(bound)
     
     return bound, gradient, unpack_params

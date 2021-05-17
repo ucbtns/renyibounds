@@ -21,7 +21,7 @@ import wandb
 
 
 
-gmab = ut.MoGMAB([-100, 0, 0], [5,5, 5], [100,0,20],[5,10,5])
+gmab = ut.MoGMAB([0, 0, 0], [5,5, 5], [100,0,20],[5,10,5])
 weights_gmab= [[0.7,0.3], [1.0, 0.0], [.40,.60]]
 
 obs = {'0': [], '1': [],'2': []}
@@ -39,7 +39,7 @@ np.save('obs.npy', obs)
 def simulator(policy, obs, gmab, bound, alpha):
     
     n_bandits = len(gmab.mu1)
-    infer1 = ut.variationalinference(50,1.0, 1.0, bound, alpha, 16)
+    infer1 = ut.variationalinference(50,1.0, 1.0, bound, alpha, 1)
     infer2 = ut.variationalinference(50,1.0, 1.0, bound, alpha, 16)
     infer3 = ut.variationalinference(50,1.0, 1.0, bound, alpha, 16)
     init_param1, gradient1 = infer1.get_posterior(obs['0'],0.1,100,0) 
@@ -67,7 +67,7 @@ class VariationalPolicy:
         gradient = posts[str(k)]
                     
         init_params[str(k)]  =  agnp.array([50.0, 1.0])
-        variational_params = adam(gradient, init_params[str(k)] , step_size=self.eta, num_iters=5048)       
+        variational_params = adam(gradient, init_params[str(k)] , step_size=self.eta, num_iters=32)       
         wandb.log({'Posterior mu' + str(k): variational_params[0]})
         wandb.log({'Posterior std' + str(k): np.exp(variational_params[1])})
                 
@@ -76,12 +76,12 @@ class VariationalPolicy:
 # =============================================================================
 # =============================================================================
 
-steps= 5e-3
+steps= 5e-1
      
 for i in  range(1,100,2):
       #  i = i/1000
-        bound = 'Elbo'; 
-        alpha = 1
+        bound = 'Renyi'; 
+        alpha = -10
         
         policy= VariationalPolicy(bound, alpha,steps,100); 
 
@@ -89,7 +89,7 @@ for i in  range(1,100,2):
         congfig = {'alpha': alpha, 'round': 1000,
                'bou': 'reny_bms', 'learning_rate': steps}
                                   
-        wandb.init(project='reny_small', entity='vilmarith',config=congfig)
+        wandb.init(project='renyi_0.5', entity='vilmarith',config=congfig)
         config = wandb.config
         simulations =1
         rounds = congfig['round']

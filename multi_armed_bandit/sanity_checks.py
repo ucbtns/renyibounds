@@ -72,7 +72,7 @@ class VariationalPolicy:
                     variational_params = adam(gradient, init_params[str(k)] , step_size=1e-100, num_iters=1)
                     samples = norm_dist(variational_params[0], variational_params[1])
                 else: 
-                    variational_params = adam(gradient, init_params[str(k)] , step_size=self.eta, num_iters=500)
+                    variational_params = adam(gradient, init_params[str(k)] , step_size=self.eta, num_iters=32)
                     init_params[str(k)] =  agnp.array([variational_params[0], variational_params[1]])
                 
                 wandb.log({'Posterior mu' + str(k): variational_params[0]})
@@ -96,7 +96,7 @@ class VariationalPolicy:
 
 bounds = ['a_inf','a_1', 'a_half','a_2', 'a_0_1']
 #st = [1e-5, 5e-5, 1e-4, 5e-4, 5e-3, 1e-3, 5e-2, 1e-2,5e-1, 1e-1]# [2, 1.5, 1.1, 1.3] #
-bounds = ['a_half']
+bounds = ['negMax']
 st =  [1e-5, 5e-5, 1e-4, 5e-4, 5e-3, 1e-3, 5e-2, 1e-2,5e-1, 1e-1, 5e-1, 1e-1, 4e-1, 3e-1, 2e-1, 6e-1, 8e-1, 9e-1, 1 , 5e-1]
 for bou in bounds:
         
@@ -106,12 +106,13 @@ for bou in bounds:
         elif bou == 'a_half': policy = VariationalPolicy('Renyi', 0.5, steps,100); bound = 'Renyi'; alpha = 0.5
         elif bou == 'a_2': policy= VariationalPolicy('Renyi', 2,steps,100); bound = 'Renyi'; alpha = 2
         elif bou == 'a_0_1': policy= VariationalPolicy('Renyi', 0.01,steps,100); bound = 'Renyi'; alpha = 0.01
+        elif bou == 'negMax':  policy= VariationalPolicy('negMax', -10000,steps,100); bound = 'negMax'; alpha = -100000
         
         
         congfig = {'alpha': alpha, 'round': 1000,
                'bou': bou, 'learning_rate': steps}
                                   
-        wandb.init(project='reny_half', entity='vilmarith',config=congfig)
+        wandb.init(project='reny_neg', entity='vilmarith',config=congfig)
         config = wandb.config
         simulations =1
         rounds = congfig['round']

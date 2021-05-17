@@ -62,8 +62,8 @@ class get_unnormalised_posterior:
         
     def unnorm_posterior_log(self, samples):                
         prior_density = agnorm.logpdf(samples, loc=self.prior_mu, scale=self.prior_std)
-
         likelihood_density = agnp.sum(agnorm.logpdf(samples.reshape(-1,1), loc=self.obs, scale=self.likelihood_std), axis=1)
+        
         return prior_density, likelihood_density
 
 def variationalbound(unnormalised_posterior, num_samples, nbound, alpha,k):
@@ -87,11 +87,14 @@ def variationalbound(unnormalised_posterior, num_samples, nbound, alpha,k):
         
         # Q samples
         mu, sigma = unpack_params(params)
+
         samples = agnpr.randn(num_samples) * agnp.sqrt(sigma) + mu
-        
-        _, logfactor = unnormalised_posterior.unnorm_posterior_log(samples) 
+        print(samples)
+        logp0, logfactor = unnormalised_posterior.unnorm_posterior_log(samples) 
         v_noise = agnp.exp(agnp.log(1.0))
-        logp0 = log_prior(samples,1.0)
+# =============================================================================
+#         logp0 = log_prior(samples,1.0)
+# =============================================================================
         logq = log_q(samples, mu, v_noise)
         
         if nbound == 'Elbo':     
@@ -102,21 +105,42 @@ def variationalbound(unnormalised_posterior, num_samples, nbound, alpha,k):
             agnp.sum(-0.5 * agnp.log(2 * math.pi * sigma * np.exp(1)))
             lower_bound = -(agnp.mean(logfactor) + KL) #kl(mu, sigma))
       
-        elif nbound == 'Renyi':            
+        elif nbound == 'Renyi':        
+            print('ps',logp0 )
+            print('po',logfactor  )
+            print('q',logq  )
             logF = logp0 + logfactor - logq 
+            print('logF',logF)
             logF = (1-alpha) * logF 
+            print('logF scaled',logF)
             lower_bound = -(logsumexp(logF)- logsumexp(logq))
-            lower_bound = lower_bound/(1-alpha) 
+            print('Lower bound',lower_bound)
+            lower_bound = lower_bound/(num_samples*(1-alpha)) 
+            print('Lower bound scaled',lower_bound)
+            
+            print('Renyi-negmax', agnp.min(logF))
+            print('Renyi', lower_bound)
+            print('Renyi-half', -2*agnp.sum(0.5*logq+0.5*(logp0+logfactor)))
+            KL = agnp.sum(-0.5 * agnp.log(2 * math.pi * v_noise) - 0.5 * (mu**2 + sigma) / v_noise) - \
+            agnp.sum(-0.5 * agnp.log(2 * math.pi * sigma * np.exp(1)))
+            elbo = -(agnp.mean(logfactor) + KL) #kl(mu, sigma))
+            print('Elbo',elbo)        
+            print('Renyi-max', agnp.max(logq - (logp0 + logfactor)))
 
         elif nbound == 'Renyi-half':            
              lower_bound = -2*agnp.sum(0.5*logq+0.5*(logp0+logfactor))
              
         elif nbound == 'Max':        
-            logF =  logp0 + logfactor -logq  
+            logF =  logq - (logp0 + logfactor) 
             lower_bound = -agnp.max(logF)
             
+        elif nbound == 'negMax':        
+            logF =  (logp0 + logfactor) -logq  
+            lower_bound = -agnp.max(logF)
+          
         wandb.log({'Alpha ' + str(k): alpha})
         wandb.log({'Bound ' + str(k): lower_bound._value})
+        
         
         return lower_bound
 
