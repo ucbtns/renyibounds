@@ -6,7 +6,7 @@ Created on Fri May 14 00:29:45 2021
 """
 
 import os
-os.chdir('D:\\Projects\\renyi_bound_analytics\\renyibounds\\multi_armed_bandit')
+#os.chdir('D:\\Projects\\renyi_bound_analytics\\renyibounds\\multi_armed_bandit')
 import util_chesl as ut 
 import numpy as np
 from tqdm import tqdm
@@ -21,80 +21,75 @@ import wandb
 
 
 
-gmab = ut.MoGMAB([0, 0, 0], [5,5, 5], [100,0,20],[5,10,5])
-weights_gmab= [[0.7,0.3], [1.0, 0.0], [.40,.60]]
-
-obs = {'0': [], '1': [],'2': []}
-for j in range(5000):
-    for k in range(3):
-        reward, _ = gmab.draw(k)
-        obs[str(k)].append(reward[0])
-            
-np.save('obs.npy', obs)  
-
-# ============================================================================= 
-# =============================================================================
-
-
-def simulator(policy, obs, gmab, bound, alpha):
+def simulator(policy, obs, bound, alpha, prior_mu, prior_sigma, likelihood_sigma, mc_samples):
     
-    n_bandits = len(gmab.mu1)
-    infer1 = ut.variationalinference(50,1.0, 1.0, bound, alpha, 1)
-    infer2 = ut.variationalinference(50,1.0, 1.0, bound, alpha, 16)
-    infer3 = ut.variationalinference(50,1.0, 1.0, bound, alpha, 16)
-    init_param1, gradient1 = infer1.get_posterior(obs['0'],0.1,100,0) 
-    init_param2, gradient2 = infer2.get_posterior(obs['1'],0.1,100,1) 
-    init_param3, gradient3 = infer3.get_posterior(obs['2'],0.1,100,2) 
-     
-    grads = {'0': gradient1, '1': gradient2,'2': gradient3}
-    policy.test_post( n_bandits,  grads)                
+    infer = ut.Variationalinference(prior_mu, prior_sigma, likelihood_sigma, bound, alpha, mc_samples)
+    init_param1, gradient = infer.get_posterior(obs)
 
-
+    policy.test_post(gradient)
 
 class VariationalPolicy:
-    
-    def __init__(self, bound, alpha,eta, iters): 
+
+    def __init__(self, bound, alpha, step_size, num_iters, prior_mu, prior_sigma):
         self.bound = bound
         self.alpha = alpha
-        self.iters = iters
-        self.eta = eta
-            
-    def test_post(self,  n_bandits, posts):        
-       
-        init_params = {'0':  agnp.array([50, 1]), '1':  agnp.array([50, 1]),'2':  agnp.array([50, 1])}  
-                
-        k = 0
-        gradient = posts[str(k)]
-                    
-        init_params[str(k)]  =  agnp.array([50.0, 1.0])
-        variational_params = adam(gradient, init_params[str(k)] , step_size=self.eta, num_iters=32)       
-        wandb.log({'Posterior mu' + str(k): variational_params[0]})
-        wandb.log({'Posterior std' + str(k): np.exp(variational_params[1])})
-                
-                    
-       
-# =============================================================================
-# =============================================================================
+        self.num_iters = num_iters
+        self.step_size = step_size
+        self.prior_mu = prior_mu
+        self.prior_sigma = prior_sigma
+    def test_post(self, gradient):
 
-steps= 5e-1
-     
-for i in  range(1,100,2):
+        init_params =  agnp.array([self.prior_mu, self.prior_sigma])
+        variational_params = adam(gradient, init_params, step_size=self.step_size, num_iters=self.num_iters)
+        wandb.log({'Posterior mu': variational_params[0]})
+        wandb.log({'Posterior std': np.exp(variational_params[1])})
+
+
+#for i in  range(1,100,2):
       #  i = i/1000
-        bound = 'Renyi'; 
-        alpha = -10
-        
-        policy= VariationalPolicy(bound, alpha,steps,100); 
 
-        
-        congfig = {'alpha': alpha, 'round': 1000,
-               'bou': 'reny_bms', 'learning_rate': steps}
-                                  
-        wandb.init(project='renyi_0.5', entity='vilmarith',config=congfig)
-        config = wandb.config
-        simulations =1
-        rounds = congfig['round']
-        for sim in tqdm(range(simulations)): 
-             simulator(policy, obs, gmab, bound, alpha)
-             
-    
-              
+def_config = {'round': 1000,
+              'bou': 'reny_bms',
+              'learning_rate': 5e-1,
+              'bound': 'Renyi',
+              'alpha': 10,
+              'num_iters': 3,
+              'simulations': 1,
+              'prior_mu': 50,
+              'prior_sigma': 1.0,
+              'likelihood_sigma': 1.0,
+              'gen_proc_mode1': 0,
+              'gen_proc_mode2': 20,
+              'gen_proc_std1': 5,
+              'gen_proc_std2': 5,
+              'gen_proc_weight1': 0.7,
+              'num_obs': 5000,
+              'mc_samples': 5,
+              'run': 1,
+              }
+
+wandb.init(project='renyi_0.5', config=def_config)
+config = wandb.config
+
+gmab = ut.MoGMAB(config['gen_proc_mode1'], config['gen_proc_std1'], config['gen_proc_mode2'],
+                 config['gen_proc_std2'], config['gen_proc_weight1'])
+
+obs = []
+for j in range(config['num_obs']):
+    reward = gmab.draw()
+    obs.append(reward)
+
+#import matplotlib.pyplot as plt
+#fig = plt.hist(obs)
+#plt.show()
+
+
+#np.save('obs.npy', obs)
+
+policy = VariationalPolicy(config['bound'], config['alpha'], config['learning_rate'], config['num_iters'],
+                           config['prior_mu'], config['prior_sigma'])
+
+
+for sim in tqdm(range(config['simulations'])):
+     simulator(policy, obs, config['bound'], config['alpha'], config['prior_mu'],
+               config['prior_sigma'], config['likelihood_sigma'], config['mc_samples'])

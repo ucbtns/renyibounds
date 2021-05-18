@@ -9,33 +9,32 @@ import random, math
 from scipy.stats import norm as norm_dist
 import scipy.stats as st
 import autograd.numpy.random as agnpr
-m= st.multivariate_normal([2,5], [0.75,0.25])
-import wandb
+#import wandb
 
 
 class MoGMAB:   
-    def __init__(self, mu1, sigma1, mu2, sigma2):
+    def __init__(self, mu1, sigma1, mu2, sigma2, weight1):
         
         self.mu1 = mu1
         self.sigma1 = sigma1
         self.mu2 = mu2
         self.sigma2 = sigma2
+        self.weight1 = weight1
        
-    def draw(self, k):
-        y1 = np.random.normal(self.mu1[k], self.sigma1[k])
-        y2 = np.random.normal(self.mu2[k], self.sigma2[k])
-        w = np.random.binomial(1, .6,1)        
-        reward = w*y1 + (1-w)*y2                  
-        regret = w*(np.max(self.mu1) - self.mu1[k]) +  (1-w)*(np.max(self.mu2)- self.mu2[k])
-        return reward, regret
+    def draw(self):
+        y1 = np.random.normal(self.mu1, self.sigma1)
+        y2 = np.random.normal(self.mu2, self.sigma2)
+        w = np.random.binomial(1, self.weight1, 1)
+        reward = w*y1 + (1-w)*y2
+        return reward.item()
 
 def sample_proposal(X, Sigma=1):   
     sample = np.random.normal(X,Sigma) # x' ~ q(x'|x)        
     return sample
 
 def proposal(X, mu,sigma):   
-    mn = norm(mu,sigma);
-    p = mn.logpdf(X);
+    mn = norm(mu,sigma)
+    p = mn.logpdf(X)
     return p
 
 def target_sample(mu,sigma,weights):
@@ -47,7 +46,7 @@ def target(X,mu,sigma,weights):
   p = np.zeros([n,1])
 
   for k in range(K):
-      mn = norm(mu[k],sigma[k]);
+      mn = norm(mu[k],sigma[k])
       p = p + weights[k]*mn.pdf(X)
   return p
 
@@ -66,7 +65,7 @@ class get_unnormalised_posterior:
         
         return prior_density, likelihood_density
 
-def variationalbound(unnormalised_posterior, num_samples, nbound, alpha,k):
+def variationalbound(unnormalised_posterior, num_samples, nbound, alpha):
 
     def unpack_params(params):
         mu, log_sigma = params[0], params[1]
@@ -89,7 +88,7 @@ def variationalbound(unnormalised_posterior, num_samples, nbound, alpha,k):
         mu, sigma = unpack_params(params)
 
         samples = agnpr.randn(num_samples) * agnp.sqrt(sigma) + mu
-        print(samples)
+        print("samples", samples)
         logp0, logfactor = unnormalised_posterior.unnorm_posterior_log(samples) 
         v_noise = agnp.exp(agnp.log(1.0))
 # =============================================================================
@@ -106,26 +105,26 @@ def variationalbound(unnormalised_posterior, num_samples, nbound, alpha,k):
             lower_bound = -(agnp.mean(logfactor) + KL) #kl(mu, sigma))
       
         elif nbound == 'Renyi':        
-            print('ps',logp0 )
-            print('po',logfactor  )
-            print('q',logq  )
+            #print('ps',logp0 )
+            #print('po',logfactor  )
+            #print('q',logq  )
             logF = logp0 + logfactor - logq 
-            print('logF',logF)
+            #print('logF',logF)
             logF = (1-alpha) * logF 
-            print('logF scaled',logF)
+            #print('logF scaled',logF)
             lower_bound = -(logsumexp(logF)- logsumexp(logq))
-            print('Lower bound',lower_bound)
+            #print('Lower bound',lower_bound)
             lower_bound = lower_bound/(num_samples*(1-alpha)) 
-            print('Lower bound scaled',lower_bound)
+            #print('Lower bound scaled',lower_bound)
             
-            print('Renyi-negmax', agnp.min(logF))
-            print('Renyi', lower_bound)
-            print('Renyi-half', -2*agnp.sum(0.5*logq+0.5*(logp0+logfactor)))
+            #print('Renyi-negmax', agnp.min(logF))
+            #print('Renyi', lower_bound)
+            #print('Renyi-half', -2*agnp.sum(0.5*logq+0.5*(logp0+logfactor)))
             KL = agnp.sum(-0.5 * agnp.log(2 * math.pi * v_noise) - 0.5 * (mu**2 + sigma) / v_noise) - \
             agnp.sum(-0.5 * agnp.log(2 * math.pi * sigma * np.exp(1)))
             elbo = -(agnp.mean(logfactor) + KL) #kl(mu, sigma))
-            print('Elbo',elbo)        
-            print('Renyi-max', agnp.max(logq - (logp0 + logfactor)))
+            #print('Elbo',elbo)
+            #print('Renyi-max', agnp.max(logq - (logp0 + logfactor)))
 
         elif nbound == 'Renyi-half':            
              lower_bound = -2*agnp.sum(0.5*logq+0.5*(logp0+logfactor))
@@ -138,8 +137,7 @@ def variationalbound(unnormalised_posterior, num_samples, nbound, alpha,k):
             logF =  (logp0 + logfactor) -logq  
             lower_bound = -agnp.max(logF)
           
-        wandb.log({'Alpha ' + str(k): alpha})
-        wandb.log({'Bound ' + str(k): lower_bound._value})
+       # wandb.log({'Bound ': lower_bound._value})
         
         
         return lower_bound
@@ -149,7 +147,7 @@ def variationalbound(unnormalised_posterior, num_samples, nbound, alpha,k):
     return bound, gradient, unpack_params
 
 
-class variationalinference:
+class Variationalinference:
     
     def __init__(self, prior_mu, prior_sigma, likelihood_sigma, bound, alpha, gradient_samples):
 
@@ -162,11 +160,10 @@ class variationalinference:
         self.gradient_samples = gradient_samples        
         self.alpha = alpha
                 
-    def get_posterior(self, obs, step_size=0.01, num_iters=50,k=0, alpha =1):
+    def get_posterior(self, obs):
         unnorm_posterior = get_unnormalised_posterior(obs, self.prior_mu, self.prior_sigma, self.likelihood_sigma)
-        variational_objective, gradient, unpack_params = variationalbound(unnorm_posterior, self.gradient_samples, self.bound, self.alpha,k)
+        variational_objective, gradient, unpack_params = variationalbound(unnorm_posterior, self.gradient_samples, self.bound, self.alpha)
         init_var_params = agnp.array([self.prior_mu, self.prior_sigma])
 
         return init_var_params, gradient
-    
-    
+
