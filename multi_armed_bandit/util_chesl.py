@@ -21,4 +21,4 @@ class VariationalPolicy(nn.Module):
     def __init__(self, prior_mu, prior_sigma):
         super().__init__()
         self.mu = torch.nn.Parameter(torch.as_tensor(prior_mu*np.ones(1, dtype=np.float32)))
-        self.log_std = torch.nn.Parameter(torch.log(torch.as_tensor(prior_sigma*np.ones(1, dtype=np.float32))))
+        self.log_var = torch.nn.Parameter(torch.log(torch.as_tensor(prior_sigma*np.ones(1, dtype=np.float32))))
