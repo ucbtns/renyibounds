@@ -25,16 +25,21 @@ import math
 
 def_config = {'learning_rate': 5e-1,
               'bound': 'Renyi',
-              'alpha': 0.1,
-              'num_iters': 50000,
-              'prior_mu': 25,
-              'prior_sigma': 3.0,
+              'alpha': 0.5,
+              'num_iters': 1000000,
+              'prior_q': 25,
+              'sigma_q': 1.0,
               'likelihood_sigma': 5.0,
-              'gen_proc_mode1': 10,
-              'gen_proc_mode2': 20,
-              'gen_proc_std1': 3,
-              'gen_proc_std2': 3,
-              'gen_proc_weight1': 0.7,
+              'prior_mu1': [8, 8, 8],
+              'prior_sigma1': [3.0, 3.0, 3.0],
+              'prior_mu2': [22,22, 22],
+              'prior_sigma2': [3.0, 3.0, 3.0],
+              'mixture_weight_prior': [0.5, 0.5, 0.5],
+              'gen_proc_mode1': [10, 14, 14],
+              'gen_proc_mode2': [25, 14, 19],
+              'gen_proc_std1': [1, 1, 1],
+              'gen_proc_std2': [1, 1, 1],
+              'mixture_weight_gen_proc': [0.9, 1.0, 0.5],
               'num_obs': 5000,
               'mc_samples': 1000,
               }
@@ -45,102 +50,107 @@ device = torch.device("cpu")
 np.random.seed(1)
 
 
-def generate_obs():
+def generate_obs(num_obs, gen_proc_mode1, gen_proc_std1, gen_proc_mode2, gen_proc_std2, gen_proc_weight1):
     obs = []
-    for j in range(config['num_obs']):
-        y1 = np.random.normal(config['gen_proc_mode1'], config['gen_proc_std1'])
-        y2 = np.random.normal(config['gen_proc_mode2'], config['gen_proc_std2'])
-        w = np.random.binomial(1, config['gen_proc_weight1'], 1)
+    for j in range(num_obs):
+        y1 = np.random.normal(gen_proc_mode1, gen_proc_std1)
+        y2 = np.random.normal(gen_proc_mode2, gen_proc_std2)
+        w = np.random.binomial(1, gen_proc_weight1, 1)
         reward = w*y1 + (1-w)*y2
         obs.append(reward.item())
     return obs
 
 
-obs = generate_obs()
 
-policy = ut.VariationalPolicy(config['prior_mu'], config['prior_sigma'])
-optimize_policy = optim.Adam(policy.parameters(), lr=config['learning_rate'])
+policy = []
+optimize_policy = []
 
-def compute_policy_loss(params):
-    def unpack_params(params):
-        mu, log_var = params[0], params[1]
-        return mu, torch.exp(log_var)
+for arm in range(0, 3):
+    policy.append(ut.VariationalPolicy(config['prior_q'], config['sigma_q']))
+    optimize_policy.append(optim.Adam(policy[arm].parameters(), lr=config['learning_rate']))
 
-    def log_q(samples, mu, sigma):
-        log_q = -0.5 * torch.log(2 * math.pi * sigma) - 0.5 * (samples - mu) **2 / sigma
-        return log_q
 
-    # Q samples
-    mu, sigma = unpack_params(params)
-    #print("unpacked params", mu, sigma)
-    samples = (torch.randn(config['mc_samples']) * torch.sqrt(sigma) + mu)
-    #print("samples", samples[0:10])
+def compute_log_prob(obs, params, mc_samples, likelihood_sigma, prior_mu1, prior_mu2, prior_sigma1, prior_sigma2,
+                     mixture_weight_prior, unif_samples=False):
 
-    #p0 = Normal(torch.tensor([config['prior_mu']],  dtype=torch.float32), torch.tensor([config['prior_sigma']],  dtype=torch.float32))
-    mix = D.Categorical(torch.ones(2, ))
-    comp = D.Normal(torch.tensor([11,19]), torch.tensor([1.0, 1.0]))
+    mu, log_var = params[0], params[1]
+    sigma = torch.exp(log_var)
+
+    if unif_samples:
+        samples = torch.arange(5.0, 35.0, 0.005)
+    else:
+        samples = (torch.randn(mc_samples) * torch.sqrt(sigma) + mu)
+
+    mix = D.Categorical(torch.tensor([mixture_weight_prior, 1-mixture_weight_prior]))
+    comp = D.Normal(torch.tensor([prior_mu1, prior_mu2]), torch.tensor([prior_sigma1, prior_sigma2]))
     p0 = D.MixtureSameFamily(mix, comp)
 
+    factor = Normal(torch.tensor([obs], dtype=torch.float32), torch.tensor([likelihood_sigma], dtype=torch.float32))
 
-    factor = Normal(torch.tensor([obs],  dtype=torch.float32), torch.tensor([config['likelihood_sigma']],  dtype=torch.float32))
-
-    logp0 = p0.log_prob(samples)
+    logps = p0.log_prob(samples)
     logfactor = torch.mean(factor.log_prob(samples.reshape(-1, 1)), axis=1)
+    logq = -0.5 * torch.log(2 * math.pi * sigma) - 0.5 * (samples - mu) ** 2 / sigma
 
-    # =============================================================================
-    #         logp0 = log_prior(samples,1.0)
-    # =============================================================================
-    logq = log_q(samples, mu, sigma)
-
-    if config['bound'] == 'Elbo':
-        # =============================================================================
-        #             lower_bound =  -(agnp.mean(gaussian_entropy(sigma) + (logp0+ logfactor)))
-        # =============================================================================
-        KL = torch.sum(-0.5 * torch.log(2 * math.pi * sigma) - 0.5 * (mu ** 2 + sigma) / sigma) - \
-             torch.sum(-0.5 * torch.log(2 * math.pi * sigma * np.exp(1)))
-        lower_bound = -(torch.mean(logfactor) + KL)  # kl(mu, sigma))
-
-    elif config['bound'] == 'Renyi':
-        # print('ps',logp0 )
-        # print('po',logfactor  )
-        # print('q',logq  )
-        logF = -logq + logp0 + logfactor
-        # print('logF',logF)
-        logF = (1 - config['alpha']) * logF
-        # print('logF scaled',logF)
-        lower_bound = torch.logsumexp(logF, 0) + torch.log(torch.as_tensor(1/config['mc_samples']))
-        # print('Lower bound',lower_bound)
-        lower_bound = lower_bound / (config['alpha']-1)
-        # print('Lower bound scaled',lower_bound)
+    return logps, logfactor, logq, samples
 
 
-    elif config['bound'] == 'Renyi-half':
-        lower_bound = -2 * torch.sum(0.5 * logq + 0.5 * (logp0 + logfactor))
-
-    elif config['bound'] == 'Max':
-        logF = logq - (logp0 + logfactor)
-        lower_bound = -torch.max(logF)
-
-    elif config['bound'] == 'negMax':
-        logF = (logp0 + logfactor) - logq
-        lower_bound = -torch.max(logF)
-
-    return lower_bound, mu.detach().item(), sigma.detach().item()
+def learn(policy):
+    obs = [[], [], []]
+    rews = []
+    arms_pulled = [0,0,0]
+    for iter in range(config['num_iters']):
 
 
-def learn():
-    # Update policy
-    for _ in range(config['num_iters']):
-        params = nn.utils.parameters_to_vector(list(policy.parameters())).to(device, non_blocking=True)
+        arm = pull_arm(policy)
+        rew = generate_obs(1, config['gen_proc_mode1'][arm], config['gen_proc_std1'][arm],
+                                config['gen_proc_mode2'][arm], config['gen_proc_std2'][arm],
+                                config['mixture_weight_gen_proc'][arm])[0]
+        obs[arm].append(rew)
+        rews.append(rew)
+        arms_pulled[arm] += 1
+         # Update policy
+        params = nn.utils.parameters_to_vector(list(policy[arm].parameters())).to(device, non_blocking=True)
 
-        optimize_policy.zero_grad()
-        loss_policy, mu, sigma = compute_policy_loss(params)
-        print("loss", loss_policy.detach().item(), "mu", mu, "sigma", sigma)
+        optimize_policy[arm].zero_grad()
+
+        logps, logfactor, logq, _ = compute_log_prob(obs[arm], params, config['mc_samples'], config['likelihood_sigma'],
+                                                  config['prior_mu1'][arm], config['prior_mu2'][arm], config['prior_sigma1'][arm],
+                                                  config['prior_sigma2'][arm], config['mixture_weight_prior'][arm])
+
+        loss_policy = ut.compute_policy_loss(config['mc_samples'], config['bound'], config['alpha'], logps, logfactor, logq)
+        if iter % 200 == 0:
+            #print("arm", arm, "iter", iter, "loss", loss_policy.detach().item(), "mu", params[0], "sigma", torch.exp(params[1]))
+            p1 = nn.utils.parameters_to_vector(list(policy[0].parameters())).to(device, non_blocking=True)
+            p2 = nn.utils.parameters_to_vector(list(policy[1].parameters())).to(device, non_blocking=True)
+            p3 = nn.utils.parameters_to_vector(list(policy[2].parameters())).to(device, non_blocking=True)
+            mu1 = p1[0].detach().item()
+            mu2 = p2[0].detach().item()
+            mu3 = p3[0].detach().item()
+
+
+            print("iter", iter, "avg regret", 15.5 - np.mean(rews), "mus", [mu1,mu2,mu3], "frac_arm_pulled", arms_pulled)
+            rews = []
+            arms_pulled = [0,0,0]
         loss_policy.backward()
-        optimize_policy.step()
+        optimize_policy[arm].step()
 
 
-learn()
+def pull_arm(policy):
+    samples = []
+    with torch.no_grad():
+        for arm in range(0, 3):
+            params = nn.utils.parameters_to_vector(list(policy[arm].parameters())).to(device, non_blocking=True)
+            mu, log_var = params[0], params[1]
+            sigma = torch.exp(log_var)
+
+            samples.append((torch.randn(1) * torch.sqrt(sigma) + mu).item())
+    arm_pulled = np.argmax(samples)
+    #print(arm_pulled)
+
+    return arm_pulled
+
+#learn(policy)
+
 
 def generate_contour():
 
@@ -169,48 +179,37 @@ def generate_contour():
     return
 #generate_contour()
 
+
+
 def save_distributions():
     # plot p(s,o)
-    samples = torch.arange(5.0, 25.0, 0.005)
-    mix = D.Categorical(torch.ones(2, ))
-    comp = D.Normal(torch.tensor([11, 19]), torch.tensor([1.0, 1.0]))
-    p0 = D.MixtureSameFamily(mix, comp)
-    factor = Normal(torch.tensor([obs], dtype=torch.float32),
-                    torch.tensor([config['likelihood_sigma']], dtype=torch.float32))
+    for arm in range(0, 3):
 
-    logp0 = p0.log_prob(samples)
-    logfactor = torch.mean(factor.log_prob(samples.reshape(-1, 1)), axis=1)
+        params = nn.utils.parameters_to_vector(list(policy[arm].parameters())).to(device, non_blocking=True)
+        obs = generate_obs(config['num_obs'], config['gen_proc_mode1'][arm], config['gen_proc_std1'][arm],
+                       config['gen_proc_mode2'][arm], config['gen_proc_std2'][arm], config['mixture_weight_gen_proc'][arm])
 
-    log_pso = logp0 + logfactor
+        logps, logfactor, logq, samples = compute_log_prob(obs, params, 1, config['likelihood_sigma'],
+                                                  config['prior_mu1'][arm], config['prior_mu2'][arm],
+                                                  config['prior_sigma1'][arm],
+                                                  config['prior_sigma2'][arm], config['mixture_weight_prior'][arm], unif_samples=True)
 
-    np.save('/home/francesco/renyibounds/multi_armed_bandit/samples',np.array(samples))
-
-    po = torch.exp(logp0)
-    np.save('/home/francesco/renyibounds/multi_armed_bandit/ps',np.array(po))
-
-    pos = torch.exp(logfactor)
-    np.save('/home/francesco/renyibounds/multi_armed_bandit/pos',np.array(pos))
+        log_pso = logps + logfactor
 
 
-    pso = torch.exp(log_pso)
-    np.save('/home/francesco/renyibounds/multi_armed_bandit/pso',np.array(pso))
+        np.save('/home/francesco/renyibounds/multi_armed_bandit/samples_arm_'+str(arm),np.array(samples))
 
+        ps = torch.exp(logps)
+        np.save('/home/francesco/renyibounds/multi_armed_bandit/ps_arm_'+str(arm),np.array(ps))
 
-    samples2 = (torch.randn(config['mc_samples']) * torch.sqrt(torch.tensor(config['prior_sigma'])) + torch.tensor(config['prior_mu']))
-    mix = D.Categorical(torch.ones(2, ))
-    comp = D.Normal(torch.tensor([11, 19]), torch.tensor([1.0, 1.0]))
-    p0 = D.MixtureSameFamily(mix, comp)
-    factor = Normal(torch.tensor([obs], dtype=torch.float32),
-                    torch.tensor([config['likelihood_sigma']], dtype=torch.float32))
+        pos = torch.exp(logfactor)
+        np.save('/home/francesco/renyibounds/multi_armed_bandit/pos_arm_'+str(arm),np.array(pos))
 
-    logp02 = p0.log_prob(samples2)
-    logfactor2 = torch.mean(factor.log_prob(samples2.reshape(-1, 1)), axis=1)
+        pso = torch.exp(log_pso)
+        np.save('/home/francesco/renyibounds/multi_armed_bandit/pso_arm_'+str(arm),np.array(pso))
 
-    log_pso2 = logp02 + logfactor2
-    pso2 = torch.exp(log_pso2)
-    np.save('/home/francesco/renyibounds/multi_armed_bandit/pso2',np.array(pso2))
-    np.save('/home/francesco/renyibounds/multi_armed_bandit/samples2',np.array(samples2))
+        np.save('/home/francesco/renyibounds/multi_armed_bandit/rew_arm_'+str(arm),np.array(obs))
 
-    po2 = torch.exp(logp02)
-    np.save('/home/francesco/renyibounds/multi_armed_bandit/ps2',np.array(po2))
     return
+
+#save_distributions()
