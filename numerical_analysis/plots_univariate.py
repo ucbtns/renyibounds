@@ -88,15 +88,12 @@ sigma_p = np.array(1).reshape(-1,1)
 sigma_q = np.array([[0.0001]])
 mu_q = 1
 
-
-
 bp = 0.8
-bl= 0.8
+bl = 0.8
 al = 0.8
 ap = 0.8
 lp = 1
 ll = 0.01
-
 
 
 print("sigma_q must be less than ", 1/(1/sigma_p + x.T.dot(np.linalg.inv(sigma_l)).dot(x)))
@@ -108,6 +105,7 @@ else:
 
 import os
 dirname = os.path.dirname(__file__)
+
 
 def plot_alpha():
     rb_value = []
@@ -132,15 +130,10 @@ def plot_alpha():
     ax.set_yscale('symlog')
     return
 
-plot_alpha()
-
-
 
 def generate_contour_gamma():
     alphas_p = np.arange(0.01, 2.0, 0.01)
     betas_p = np.arange(0.01, 2.0, 0.01)
-
-
 
 
     import pandas as pd
@@ -162,8 +155,6 @@ def generate_contour_gamma():
     data.to_csv(dirname+'/contour_gamma' + '.csv')
     return
 
-generate_contour_gamma()
-
 
 def plot_alpha_p():
     rb_value = []
@@ -184,8 +175,6 @@ def plot_alpha_p():
     ax.plot(alphas, rb_value)
     ax.set_yscale('symlog')
     return
-
-plot_alpha_p()
 
 
 def generate_contour_gamma_alphas():
@@ -211,8 +200,6 @@ def generate_contour_gamma_alphas():
     data.to_csv(dirname+'/contour_gamma_alphas' + '.csv')
     return
 
-generate_contour_gamma_alphas()
-
 
 def generate_contour_alpha_p_muq():
     alphas_p = np.arange(0.001, 5, 0.01)
@@ -236,8 +223,6 @@ def generate_contour_alpha_p_muq():
     data.to_csv(dirname+'/contour_alpha_p_muq' + '.csv')
     return
 
-generate_contour_alpha_p_muq()
-
 
 def generate_contour_beta_p_muq():
     betas_p = np.arange(0.001, 1, 0.01)
@@ -259,9 +244,6 @@ def generate_contour_beta_p_muq():
 
     data.to_csv(dirname+'/contour_beta_p_muq' + '.csv')
     return
-
-
-generate_contour_beta_p_muq()
 
 
 def generate_contour_alpha_muq():
@@ -288,4 +270,132 @@ def generate_contour_alpha_muq():
     data.to_csv(dirname+'/contour_alpha_muq' + '.csv')
     return
 
-generate_contour_alpha_muq()
+
+def generate_contour_alpha_p_sigmaq():
+    alphas_p = np.arange(0.001, 5, 0.01)
+    sigma_q = np.arange(0.00001, 0.002, 0.00001)
+    import pandas as pd
+
+    data = pd.DataFrame()
+    i = 0
+    for alpha_p in alphas_p:
+        bounds = []
+        for sigmaq in sigma_q:
+            bound = KL_gamma_partial(0.4, sigmaq, sigma_l, sigma_p, y, x, alpha_p, 0.5, lp)
+
+            bounds.append(bound.item())
+
+        data['bound_'+str(i)] = bounds
+        i += 1
+        print(i/len(alphas_p)*100,"%")
+
+    data.to_csv(dirname+'/contour_alpha_p_sigmaq' + '.csv')
+    return
+
+
+
+def generate_contour_beta_p_sigmaq():
+    betas_p = np.arange(0.001, 1, 0.01)
+    sigma_q = np.arange(0.00001, 0.002, 0.00001)
+    import pandas as pd
+
+    data = pd.DataFrame()
+    i = 0
+    for beta_p in betas_p:
+        bounds = []
+        for sigmaq in sigma_q:
+            bound = KL_gamma_partial(0.4, sigmaq, sigma_l, sigma_p, y, x, 0.5, beta_p, lp)
+
+            bounds.append(bound.item())
+
+        data['bound_'+str(i)] = bounds
+        i += 1
+        print(i/len(betas_p)*100,"%")
+
+    data.to_csv(dirname+'/contour_beta_p_sigmaq' + '.csv')
+    return
+
+
+def generate_contour_alpha_sigmaq():
+
+    alphas = np.arange(0.001, 20, 0.04)
+    sigma_q = np.arange(0.00001, 0.002, 0.00001)
+
+
+    import pandas as pd
+
+    data = pd.DataFrame()
+    i = 0
+    for alpha in alphas:
+        bounds = []
+        for sigmaq in sigma_q:
+            bound = RB(alpha, 0.4, sigmaq, sigma_l, sigma_p, y, x)
+
+            bounds.append(bound.item())
+
+        data['bound_'+str(i)] = bounds
+        i += 1
+        print(i/len(alphas)*100,"%")
+
+    data.to_csv(dirname+'/contour_alpha_sigmaq' + '.csv')
+    return
+
+
+def generate_contour_alpha_p_beta_p_sigmaq_const_mean():
+    alphas_p = np.arange(0.001, 5, 0.01)
+    sigma_q = np.arange(0.00001, 0.002, 0.00001)
+    import pandas as pd
+
+    data = pd.DataFrame()
+    i = 0
+    for alpha_p in alphas_p:
+        bounds = []
+        for sigmaq in sigma_q:
+            bound = KL_gamma_partial(0.4, sigmaq, sigma_l, sigma_p, y, x, alpha_p, alpha_p/5, lp)
+
+            bounds.append(bound.item())
+
+        data['bound_'+str(i)] = bounds
+        i += 1
+        print(i/len(alphas_p)*100,"%")
+
+    data.to_csv(dirname+'/contour_alpha_p_beta_p_sigmaq_const_mean' + '.csv')
+    return
+
+
+
+def generate_contour_alpha_p_beta_p_sigmaq_const_var():
+    betas_p = np.arange(0.001, 1, 0.01)
+    sigma_q = np.arange(0.00001, 0.002, 0.00001)
+    import pandas as pd
+
+    data = pd.DataFrame()
+    i = 0
+    for beta_p in betas_p:
+        bounds = []
+        for sigmaq in sigma_q:
+            bound = KL_gamma_partial(0.4, sigmaq, sigma_l, sigma_p, y, x, np.sqrt(beta_p*5), beta_p, lp)
+
+            bounds.append(bound.item())
+
+        data['bound_'+str(i)] = bounds
+        i += 1
+        print(i/len(betas_p)*100,"%")
+
+    data.to_csv(dirname+'/contour_alpha_p_beta_p_sigmaq_const_var' + '.csv')
+    return
+
+
+
+#plot_alpha()
+#plot_alpha_p()
+#generate_contour_gamma()
+#generate_contour_alpha_p_muq()
+#generate_contour_gamma_alphas()
+#generate_contour_beta_p_muq()
+#generate_contour_alpha_muq()
+#generate_contour_alpha_p_sigmaq()
+#generate_contour_beta_p_sigmaq()
+#generate_contour_alpha_sigmaq()
+#generate_contour_alpha_p_beta_p_sigmaq_const_mean()
+generate_contour_alpha_p_beta_p_sigmaq_const_var()

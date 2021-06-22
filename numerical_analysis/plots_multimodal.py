@@ -14,6 +14,7 @@ import torch
 from torch.distributions.normal import Normal
 import torch.distributions as D
 import math
+import torch.nn as nn
 
 def_config = {'learning_rate': 1e-1,
               'bound': 'Renyi',
@@ -30,8 +31,8 @@ def_config = {'learning_rate': 1e-1,
               'gen_proc_mode2': [20, 12, 14.5],
               'gen_proc_std1': [1, 0.5, 0.3],
               'gen_proc_std2': [1, 0.5, 0.3],
-              'mixture_weight_gen_proc': [0.97, 1.0, 0.5],
-              'num_obs': 300,
+              'mixture_weight_gen_proc': [0.8, 1.0, 0.5],
+              'num_obs': 1000,
               'mc_samples': 1000,
               'save_distributions': True,
               'train': False,
@@ -92,13 +93,56 @@ def compute_log_prob(samples, obs, params, mc_samples, prior_mu1, prior_mu2, pri
 
 
 
+def save_distributions():
+    arm=0
+
+    params = nn.utils.parameters_to_vector(list(policy[arm].parameters())).to(device, non_blocking=True)
+    obs = generate_obs(config['num_obs'], config['gen_proc_mode1'][arm], config['gen_proc_std1'][arm],
+                   config['gen_proc_mode2'][arm], config['gen_proc_std2'][arm], config['mixture_weight_gen_proc'][arm])
+
+    #samples_unscaled = torch.randn(config['mc_samples'])
+    samples = torch.arange(0.0, 30.0, 0.003)
+
+    logps, logfactor, logq, samples = compute_log_prob(samples, obs, params, 1,
+                                              config['prior_mu1'][arm], config['prior_mu2'][arm],
+                                              config['prior_sigma1'][arm],
+                                              config['prior_sigma2'][arm], config['mixture_weight_prior'][arm], unif_samples=True)
+
+    log_pso = logps + logfactor
+
+    int = torch.mean(torch.exp(log_pso)) * 30
+    print("integral of p(s,o) for arm ", arm, ":", int)
+
+    np.save(dirname+'/multimodal_samples',np.array(samples))
+
+    ps = torch.exp(logps)
+    np.save(dirname+'/multimodal_ps',np.array(ps))
+
+    pos = torch.exp(logfactor)
+    np.save(dirname+'/multimodal_pos',np.array(pos))
+
+    pso = torch.exp(log_pso)
+    np.save(dirname+'/multimodal_pso',np.array(pso))
+
+    np.save(dirname+'/multimodal_rew',np.array(obs))
+    return
+
+
+# Save logp for each arm
+if config['save_distributions']:
+    save_distributions()
+
+
+
+
+
 def generate_contour():
     alphas = [1e-6, 0.5, 0.99, 1.01, 2, 1e6]
 
     arm=0
-    means = np.arange(5.0, 25.0, 0.2)
+    means = np.arange(0.0, 26.0, 0.2)
     sigmas = np.arange(0.001, 5.0, 0.2)
-    obs = generate_obs(1000, config['gen_proc_mode1'][arm], config['gen_proc_std1'][arm],
+    obs = generate_obs(config['num_obs'], config['gen_proc_mode1'][arm], config['gen_proc_std1'][arm],
                        config['gen_proc_mode2'][arm], config['gen_proc_std2'][arm],
                        config['mixture_weight_gen_proc'][arm])
     import pandas as pd
