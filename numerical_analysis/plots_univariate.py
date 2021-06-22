@@ -132,7 +132,7 @@ def plot_alpha():
     ax.set_yscale('symlog')
     return
 
-#plot_alpha()
+plot_alpha()
 
 
 
@@ -162,7 +162,7 @@ def generate_contour_gamma():
     data.to_csv(dirname+'/contour_gamma' + '.csv')
     return
 
-#generate_contour_gamma()
+generate_contour_gamma()
 
 
 def plot_alpha_p():
@@ -185,7 +185,7 @@ def plot_alpha_p():
     ax.set_yscale('symlog')
     return
 
-#plot_alpha_p()
+plot_alpha_p()
 
 
 def generate_contour_gamma_alphas():
@@ -211,7 +211,7 @@ def generate_contour_gamma_alphas():
     data.to_csv(dirname+'/contour_gamma_alphas' + '.csv')
     return
 
-#generate_contour_gamma_alphas()
+generate_contour_gamma_alphas()
 
 
 def generate_contour_alpha_p_muq():
@@ -261,7 +261,7 @@ def generate_contour_beta_p_muq():
     return
 
 
-#generate_contour_beta_p_muq()
+generate_contour_beta_p_muq()
 
 
 def generate_contour_alpha_muq():
@@ -288,4 +288,4 @@ def generate_contour_alpha_muq():
     data.to_csv(dirname+'/contour_alpha_muq' + '.csv')
     return
 
-#generate_contour_alpha_muq()
+generate_contour_alpha_muq()

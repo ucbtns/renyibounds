@@ -6,12 +6,9 @@ Created on Fri May 14 00:29:45 2021
 """
 
 import os
-#os.chdir('D:\\Projects\\renyi_bound_analytics\\renyibounds\\multi_armed_bandit')
-import util_chesl as ut
+from multi_armed_bandit import utils as ut
 import numpy as np
-from scipy.stats import norm as norm_dist
 import wandb
-import torch.nn as nn
 import torch.optim as optim
 import torch
 from torch.distributions.normal import Normal
