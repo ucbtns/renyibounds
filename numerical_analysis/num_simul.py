@@ -3,243 +3,289 @@
 # @purpose: Section 4.0 for the Renyi Bound paper
 # =============================================================================
 
-
-
 import numpy as np
 import math
 import matplotlib.pyplot as plt
 np.random.seed(1)
 
-## ELBO - gaussian-gamma system, with a gaussian approximate density:
-# ===================================
-nlg = lambda x: np.log(x + 1e-32) 
-k_ELBO = lambda lq, sq,lp,sp,ll,sl,x: sp*lp + (x.T.dot(ll*sl).dot(x)) - lq*sq
-mu_ELBO = lambda k, muq, sq,lq, ll, sl, y, x: k**-1*( x.T.dot(ll*sl).dot(y)-lq*sq*muq)
-
-def ELBO(muq, lq, sq, aq, bq,
-         ll, sl, al, bl, 
-         lp, sp, ap, bp, y, x):
-    
-    k = k_ELBO(lq, sq,lp,sp,ll,sl,x)
-    mu = mu_ELBO(k,muq, sq,lq, ll, sl, y, x)
-    
-    M = sl.shape[0]      
-    fr = 0.5*nlg((np.linalg.det((ll*sl))*np.linalg.det(lp*sp))/np.linalg.det((lq*sq))) -nlg(math.gamma(al)*math.gamma(ap))
-    sr =  al*nlg(bl*ll) + ap*nlg(bp*lp) - nlg(lp*ll)-M*nlg(2*np.pi) - lp*bp - ll*bl - 0.5*ll*y.T.dot(sl).dot(y)
-    tr = -0.5*((muq-mu).T.dot(k).dot(muq-mu) + np.trace(k.dot(lq*sq)))
-    er = 0.5*((mu).T.dot(k).dot(mu) + lq*muq.T.dot(sq).dot(muq))
-    
-    return fr + sr +tr + er
-
-## Renyi bound - gaussian system:
-# ===================================
-
-sigma_RB = lambda alpha, lam, sq: ((1-alpha)*lam + alpha/sq)**-1
-lam_RB = lambda sp, sl, x: 1/sp +  x.T.dot(np.linalg.inv(sl)).dot(x)
-mu_RB = lambda alpha, s, muq, sq, sl, y, x: s*(alpha*(np.linalg.inv(sq))*muq + (1-alpha)*x.T.dot(np.linalg.inv(sl)).dot(y))
+nlg = lambda x: np.log(x)
+sigma_RB = lambda alpha, sp, sl, sq, x: ((1-alpha)*(1/sp +  x.T.dot(np.linalg.inv(sl)).dot(x)) + alpha/sq)**-1
+mu_RB = lambda alpha, s, muq, sq, sl, y, x: s*(alpha*(1/sq)*muq + (1-alpha)*x.T.dot(np.linalg.inv(sl)).dot(y))
+sigma_KL = lambda sp, sl, sq, x: (1/sp +  x.T.dot(np.linalg.inv(sl)).dot(x) - 1/sq)**-1
+mu_KL = lambda s_kl, muq, sq, sl, y, x: s_kl*(-(1/sq)*muq + x.T.dot(np.linalg.inv(sl)).dot(y))
 
 
-def RB(alpha, muq, sq, sl, sp, y, x ):
-    
-    lam = lam_RB(sp, sl, x)
-    s = sigma_RB(alpha, lam, sq)
+def RB(alpha, muq, sq, sl, sp, y, x):
+
+    #compute sigma alpha
+    s = sigma_RB(alpha, sp, sl, sq, x)
     mu = mu_RB(alpha, s, muq, sq, sl, y, x )
-    
-    tr1 = -0.5*(alpha*(muq**2/sq) + (1-alpha)*y.T.dot(np.linalg.inv(sl)).dot(y) - mu**2/s)
-    
-    
-    tr2 = np.linalg.det(s)/((np.linalg.det(sq)**alpha) *(np.linalg.det(sp)**(1-alpha))
-                                    *(np.linalg.det(sl)**(1-alpha)) * (2*np.pi)**((1-alpha)*y.shape[0]))
-    
-# =============================================================================
-#     tr1 = -0.5*(alpha*muq.T.dot(np.linalg.inv(sq)).dot(muq) + (1-alpha)*y.T.dot(np.linalg.inv(sl)).dot(y) - mu.T.dot(np.linalg.inv(s)).dot(mu))            
-#     tr2 = np.linalg.det(s)/ ((np.linalg.det(sq)**alpha) *(np.linalg.det(sp)**(1-alpha))
-#                                     *(np.linalg.det(sl)**(1-alpha)) * (2*np.pi)**((1-alpha)*y.shape[0]))
-#     
-# =============================================================================
-    return (0.5*nlg(tr2) + tr1)/(1-alpha)
- 
-def gelbo(muq,sq,sl,sp,y,x):
-    #lam = lam_(sp, sl, x)  
-    #  (np.log(sq/sp)) + (sq**2+(muq-mup)**2)/2*sp**2 + 1/2
 
-    import math
-    KL =np.sum(-0.5 * nlg(2 * math.pi * sp) - 0.5 * (muq**2 + sq) / sp) - \
-                np.sum(-0.5 * nlg(2 * math.pi * sq * np.exp(1)))
-    return (np.mean(sl) + KL)
+    tr1 = 0.5 * nlg(sq/(sp* np.linalg.det(sl))) - 0.5* y.shape[0]*nlg(((2*np.pi))) + 0.5 / (alpha - 1) * nlg(sq/s)
+
+    tr2 = 0.5/(alpha-1)*(alpha*(muq**2/sq) + (1-alpha)*y.T.dot(np.linalg.inv(sl)).dot(y) - mu**2/s)
+
+    return tr1 + tr2
+
+
+def KL(muq, sq, sl, sp, y, x):
+
+    s_kl = sigma_KL(sp, sl, sq, x)
+    mu_kl = mu_KL(s_kl, muq, sq, sl, y, x)
+
+    tr1 = 0.5*nlg(sq / (sp * np.linalg.det(sl))) - 0.5 * y.shape[0] * nlg(((2 * np.pi)))
+
+    tr2 = - 0.5*(y.T.dot(np.linalg.inv(sl)).dot(y) - muq ** 2 / sq - mu_kl **2 / s_kl + (muq - mu_kl) ** 2 / s_kl)
+
+    tr3 = - 0.5* sq / s_kl
+
+    kl = tr1 + tr2 + tr3
+    return kl
+
+
+def KL_gamma(muq, sq, sl, sp, y, x, ap, bp, al, bl, lp, ll):
+
+    s_kl = sigma_KL(sp, sl, sq, x)
+    mu_kl = mu_KL(s_kl, muq, sq, sl, y, x)
+
+    tr1 = 0.5*nlg(sq / (sp * np.linalg.det(sl))) - 0.5 * y.shape[0] * nlg(((2 * np.pi)))
+
+    tr2 = - 0.5*(y.T.dot(np.linalg.inv(sl)).dot(y) - muq ** 2 / sq - mu_kl **2 / s_kl + (muq - mu_kl) ** 2 / s_kl)
+
+    tr3 = - 0.5* sq / s_kl
+
+    tr4 = (al-1)*nlg(ll) + (ap-1)*nlg(lp) + (al)*nlg(bl) + (ap)*nlg(bp) - nlg(math.gamma(al)) - nlg(math.gamma(ap))
+
+    kl = tr1 + tr2 + tr3 + tr4
+    return kl
+
+
+def KL_gamma_partial(muq, sq, sl, sp, y, x, ap, bp, lp):
+
+    s_kl = sigma_KL(sp, sl, sq, x)
+    mu_kl = mu_KL(s_kl, muq, sq, sl, y, x)
+
+    tr1 = 0.5*nlg(sq / (sp * np.linalg.det(sl))) - 0.5 * y.shape[0] * nlg(((2 * np.pi)))
+
+    tr2 = - 0.5*(y.T.dot(np.linalg.inv(sl)).dot(y) - muq ** 2 / sq - mu_kl **2 / s_kl + (muq - mu_kl) ** 2 / s_kl)
+
+    tr3 = - 0.5* sq / s_kl
+
+    tr4 = (ap-1)*nlg(lp) + (ap)*nlg(bp) - nlg(math.gamma(ap))
+
+    kl = tr1 + tr2 + tr3 + tr4
+    return kl
 
 
 # Simulation 1:
 # ===================================================
-x = np.arange(0,20,1.1).reshape(-1,1)
-sl = np.identity(x.shape[0])*5
-y = np.random.multivariate_normal(0.4*x.ravel(), sl)
 
-sp = np.array(5).reshape(-1,1)
-mq = np.array(0.0).reshape(-1,1)
-sq = np.array(1e-4).reshape(-1,1)
-
-bq = 0.8
-bp = 0.8
-bl= 0.8
-
-means = []
-prior = []
-rb_value = []
-elbo_value1 = []
-elbo_value2 = []
-elbo_value3 = []
-pr = 0.8
-al = pr
-ap = pr
-aq = pr
-lq = pr
-lp = pr
-ll = pr 
-
-prr = 0.8
-
-m = np.array(10)
-#np.arange(0.1,240,0.5)
-alpha = [0.1, 0.2, 0.3, 0.4,0.6, 0.7,0.8,0.9, 1.0]
-prior =[0, 0.2,0.6, 1.4, 1.6, 2.8, 3.4, 3.8,4.0]
-for (a, pr) in zip(alpha, prior):  
-        means.append(m)  
-        lq = pr
-        lp = pr 
-        ll = pr 
-        bq = prr
-        bp = prr
-        bl = prr
-
-        # Renyi bound:
-        if a == 1.0:
-           rb_value.append(np.array(gelbo(m.reshape(-1,1),sq,sl,sp,y,x)).reshape(-1,1))
-        else:
-           rb_value.append(RB(a,m.reshape(-1,1), sq, sl, sp, y, x))
-        
-        # ELBO: 
-        elbo_value2.append(ELBO(m.reshape(-1,1), lq, sq, aq, bq,ll, sl, al, bl, lp, sp, ap, bp, y, x))  
-        bq = pr
-        bp = pr
-        bl = pr
-        elbo_value1.append(ELBO(m.reshape(-1,1), lq, sq, aq, bq,ll, sl, al, bl, lp, sp, ap, bp, y, x))
-        lq = prr
-        lp = prr
-        ll = prr        
-        
-        elbo_value3.append(ELBO(m.reshape(-1,1), lq, sq, aq, bq,ll, sl, al, bl, lp, sp, ap, bp, y, x))
-
-rb_value = np.concatenate(rb_value)
-elbo_value1 = np.concatenate(elbo_value1)
-elbo_value2 = np.concatenate(elbo_value2)
-elbo_value3 = np.concatenate(elbo_value3)
-
-
-# Plot:
-# =====================================================
-fig, axes = plt.subplots(nrows=1, ncols=4, figsize=(12, 4), dpi=1000)
-axes[0].plot(alpha,rb_value/2, linewidth=2.5, color ='black')
-axes[0].set_xlim([0,1.05])
-axes[0].set_ylim([-102000,0.1])
-axes[0].set_ylabel('Renyi Bound (nats)')
-axes[0].set_xlabel(r'$\alpha$ value')
-axes[1].set_ylabel('Negative Free Energy (nats)')
-axes[1].set_xlabel(r"$\lambda_K$ value")
-axes[1].plot(prior,elbo_value2, linewidth=2.5, color ='black')
-axes[1].set_xlim([0,4.1])
-axes[1].set_ylim([-102000,0.1])
-axes[2].set_ylabel('Negative Free Energy (nats)')
-axes[2].set_xlabel(r"$\beta_K$ value")
-axes[2].plot(prior,elbo_value3, linewidth=2.5, color ='black')
-axes[2].set_xlim([0,4.1])
-axes[2].set_ylim([-102000,0.1])
-
-axes[3].set_ylabel('Negative Free Energy (nats)')
-axes[3].set_xlabel(r"$\beta_K & \lambda_K$ value")
-axes[3].plot(prior,elbo_value1, linewidth=2.5, color ='black')
-axes[3].set_xlim([0,4.1])
-axes[3].set_ylim([-102000,0.1])
-fig.tight_layout()
-
-
-# Simulation 2:
-# ========================================================
 
 x = np.arange(0,20,1.1).reshape(-1,1)
-sl = np.identity(x.shape[0])*0.2
-y = np.random.multivariate_normal(0.4*x.ravel(), sl)
+sigma_l = np.identity(x.shape[0])*1
+y = np.random.multivariate_normal(0.4*x.ravel(), sigma_l)
+sigma_p = np.array(1).reshape(-1,1)
+sigma_q = np.array([[0.0001]])
+mu_q = 1
 
-sp = np.array(1.0).reshape(-1,1)
-mq = np.array(0.0).reshape(-1,1)
-sq = np.array(0.002).reshape(-1,1)
 
-bq = 0.8
+
 bp = 0.8
 bl= 0.8
+al = 0.8
+ap = 0.8
+lp = 1
+ll = 0.01
 
-rb_valueS = np.zeros((20,9))
-elbo_valueS = np.zeros((20,9))
 
-elbo_value2 = np.zeros((20,9))
-pr = 0.8
-al = pr
-ap = pr
-aq = pr
-lq = pr
-lp = pr
-ll = pr 
 
-m = np.array(10)
-#np.arange(0.1,240,0.5)
-alpha = [0.1, 0.2, 0.3, 0.4,0.6, 0.7,0.8,0.9, 1.0]
-prior =[0.2, 0.4,0.6, 0.8, 1.0, 1.2, 1.4, 1.6,2.8]
-means = np.arange(-100, 100, 10)
+print("sigma_q must be less than ", 1/(1/sigma_p + x.T.dot(np.linalg.inv(sigma_l)).dot(x)))
+print("sigma_q:", sigma_q)
+if (sigma_q < 1/(1/sigma_p + x.T.dot(np.linalg.inv(sigma_l)).dot(x))):
+    print("maximum alpha for sq is infinite")
+else:
+    print("maximum alpha for sq:", sigma_q/(sigma_q-1/(1/sigma_p + x.T.dot(np.linalg.inv(sigma_l)).dot(x))))
 
-for i, (a, pr) in enumerate(zip(alpha, prior)):  
-    for n, m in enumerate(means):
-        lq = pr
-        lp = pr 
-        ll = pr 
-        bq = 0.8
-        bp = 0.8
-        bl = 0.8
+import os
+dirname = os.path.dirname(__file__)
 
+def plot_alpha():
+    rb_value = []
+    alphas = []
+    for alp in range (0,400):
+
+        alpha = np.exp(alp/100)-1
         # Renyi bound:
-        if a == 1.0:
-           rb_valueS[n,i] = gelbo(m.reshape(-1,1),sq,sl,sp,y,x)
+        if alpha == 1.0:
+           rb_value.append(KL(mu_q, sigma_q, sigma_l, sigma_p, y, x))
         else:
-           rb_valueS[n,i] = RB(a,m.reshape(-1,1), sq, sl, sp, y, x)
-        
-        # ELBO: 
-        elbo_valueS[n,i] = ELBO(m.reshape(-1,1), lq, sq, aq, bq,ll, sl, al, bl, lp, sp, ap, bp, y, x)
-         # ELBO: 
-        bq = pr
-        bp = pr
-        bl = pr
-        lq = 0.8
-        lp = 0.8
-        ll = 0.8  
-        elbo_value2[n,i] = ELBO(m.reshape(-1,1), lq, sq, aq, bq,ll, sl, al, bl, lp, sp, ap, bp, y, x)
-        
+           rb_value.append(RB(alpha, mu_q, sigma_q, sigma_l, sigma_p, y, x).item())
 
-im = plt.imshow(rb_valueS/2, cmap=plt.cm.RdBu, extent=(0,1,0,1), interpolation='bilinear')
-fig, axes = plt.subplots(nrows=1, ncols=4, figsize=(12, 4), dpi=1000)
-axes[0].imshow(rb_valueS, cmap=plt.cm.RdBu, extent=(-100,100,-100,100), interpolation='bilinear')
-axes[0].set_ylabel(r'$u_q$')
-axes[0].set_xlabel(r'$\alpha$ value')
-axes[1].imshow(elbo_valueS, cmap=plt.cm.RdBu, extent=(-100,100,-100,100), interpolation='bilinear')
-axes[1].set_xlabel(r"$\lambda_K$ value")
-axes[2].imshow(elbo_value2, cmap=plt.cm.RdBu, extent=(-100,100,-100,100), interpolation='bilinear')
-axes[2].set_xlabel(r"$\beta_K$ value")
-fig.tight_layout()
-plt.colorbar(im)
-plt.show()
+        alphas.append(alpha)
+    print("bound", rb_value)
+    print("alpha", alphas)
+    np.save(dirname+'/alphas', alphas)
+    np.save(dirname+'/bound', rb_value)
+
+    fig, ax = plt.subplots()
+    ax.plot(alphas, rb_value)
+    ax.set_yscale('symlog')
+    return
+
+#plot_alpha()
+
+
+
+def generate_contour_gamma():
+    alphas_p = np.arange(0.01, 2.0, 0.01)
+    betas_p = np.arange(0.01, 2.0, 0.01)
 
 
 
 
+    import pandas as pd
+
+    data = pd.DataFrame()
+    i = 0
+    for alpha_p in alphas_p:
+        bounds = []
+        for beta_p in betas_p:
+
+            bound = KL_gamma_partial(mu_q, sigma_q, sigma_l, sigma_p, y, x, alpha_p, beta_p, lp)
+
+            bounds.append(bound.item())
+
+        data['bound_'+str(i)] = bounds
+        i += 1
+        print(i/len(alphas_p)*100,"%")
+
+    data.to_csv(dirname+'/contour_gamma' + '.csv')
+    return
+
+#generate_contour_gamma()
 
 
+def plot_alpha_p():
+    rb_value = []
+    alphas = []
+    for alph in range (0,500):
+
+        alpha_p = np.exp(alph/100)-0.999
+        # Renyi bound:
+        rb_value.append(KL_gamma_partial(mu_q, sigma_q, sigma_l, sigma_p, y, x, alpha_p, 0.8, lp).item())
+
+        alphas.append(alpha_p)
+    print("bound", rb_value)
+    print("alpha", alphas)
+    np.save(dirname+'/alphas_p', alphas)
+    np.save(dirname+'/rb_value_p', rb_value)
+
+    fig, ax = plt.subplots()
+    ax.plot(alphas, rb_value)
+    ax.set_yscale('symlog')
+    return
+
+#plot_alpha_p()
 
 
+def generate_contour_gamma_alphas():
+    alphas_p = np.arange(0.01, 2.0, 0.01)
+    alphas_l = np.arange(0.01, 2.0, 0.01)
+
+    import pandas as pd
+
+    data = pd.DataFrame()
+    i = 0
+    for alpha_p in alphas_p:
+        bounds = []
+        for alpha_l in alphas_l:
+
+            bound = KL_gamma(mu_q, sigma_q, sigma_l, sigma_p, y, x, alpha_p, bp, alpha_l, bl, lp, ll)
+
+            bounds.append(bound.item())
+
+        data['bound_'+str(i)] = bounds
+        i += 1
+        print(i/len(alphas_p)*100,"%")
+
+    data.to_csv(dirname+'/contour_gamma_alphas' + '.csv')
+    return
+
+#generate_contour_gamma_alphas()
+
+
+def generate_contour_alpha_p_muq():
+    alphas_p = np.arange(0.001, 5, 0.01)
+
+    mu_q = np.arange(0.33, 0.45, 0.01)
+    import pandas as pd
+
+    data = pd.DataFrame()
+    i = 0
+    for alpha_p in alphas_p:
+        bounds = []
+        for muq in mu_q:
+            bound = KL_gamma_partial(muq, sigma_q, sigma_l, sigma_p, y, x, alpha_p, 0.5, lp)
+
+            bounds.append(bound.item())
+
+        data['bound_'+str(i)] = bounds
+        i += 1
+        print(i/len(alphas_p)*100,"%")
+
+    data.to_csv(dirname+'/contour_alpha_p_muq' + '.csv')
+    return
+
+generate_contour_alpha_p_muq()
+
+
+def generate_contour_beta_p_muq():
+    betas_p = np.arange(0.001, 1, 0.01)
+    mu_q = np.arange(0.33, 0.45, 0.01)
+    import pandas as pd
+
+    data = pd.DataFrame()
+    i = 0
+    for beta_p in betas_p:
+        bounds = []
+        for muq in mu_q:
+            bound = KL_gamma_partial(muq, sigma_q, sigma_l, sigma_p, y, x, 0.5, beta_p, lp)
+
+            bounds.append(bound.item())
+
+        data['bound_'+str(i)] = bounds
+        i += 1
+        print(i/len(betas_p)*100,"%")
+
+    data.to_csv(dirname+'/contour_beta_p_muq' + '.csv')
+    return
+
+
+#generate_contour_beta_p_muq()
+
+
+def generate_contour_alpha_muq():
+
+    alphas = np.arange(0.001, 10, 0.01)
+    mu_q = np.arange(0.33, 0.45, 0.001)
+
+
+    import pandas as pd
+
+    data = pd.DataFrame()
+    i = 0
+    for alpha in alphas:
+        bounds = []
+        for muq in mu_q:
+            bound = RB(alpha, muq, sigma_q, sigma_l, sigma_p, y, x)
+
+            bounds.append(bound.item())
+
+        data['bound_'+str(i)] = bounds
+        i += 1
+        print(i/len(alphas)*100,"%")
+
+    data.to_csv(dirname+'/contour_alpha_muq' + '.csv')
+    return
+
+#generate_contour_alpha_muq()
