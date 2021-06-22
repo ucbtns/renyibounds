@@ -35,9 +35,9 @@ def_config = {'learning_rate': 1e-1,
               'gen_proc_std2': [1, 0.5, 0.3],
               'mixture_weight_gen_proc': [0.97, 1.0, 0.5],
               'num_obs': 300,
-              'mc_samples': 300,
+              'mc_samples': 30000,
               'save_distributions': True,
-              'train': True,
+              'train': False,
               'run': 1,
               'log_every': 100,
               'num_updates': 10,
@@ -234,6 +234,8 @@ if config['train']:
 
 
 def generate_contour():
+    alphas = [1e-6, 0.1, 0.5, 0.99, 1.01, 2, 10, 1e6]
+
     arm=0
     means = np.arange(5.0, 25.0, 0.2)
     sigmas = np.arange(0.001, 5.0, 0.2)
@@ -242,29 +244,31 @@ def generate_contour():
                        config['mixture_weight_gen_proc'][arm])
     import pandas as pd
 
-    data = pd.DataFrame()
+
     i = 0
-    for mean in means:
-        bounds = []
-        for sigma in sigmas:
-            params = torch.cat((torch.as_tensor([mean], dtype=torch.float32), torch.as_tensor([sigma], dtype=torch.float32)), 0).detach()
+    for alpha in alphas:
+        data = pd.DataFrame()
+        for mean in means:
+            bounds = []
+            for sigma in sigmas:
+                params = torch.cat((torch.as_tensor([mean], dtype=torch.float32), torch.as_tensor([sigma], dtype=torch.float32)), 0).detach()
 
-            logps, logfactor, logq, samples = compute_log_prob(obs, params, config['mc_samples'],
-                                                               config['prior_mu1'][arm], config['prior_mu2'][arm],
-                                                               config['prior_sigma1'][arm],
-                                                               config['prior_sigma2'][arm],
-                                                               config['mixture_weight_prior'][arm], unif_samples=True)
+                logps, logfactor, logq, samples = compute_log_prob(obs, params, config['mc_samples'],
+                                                                   config['prior_mu1'][arm], config['prior_mu2'][arm],
+                                                                   config['prior_sigma1'][arm],
+                                                                   config['prior_sigma2'][arm],
+                                                                   config['mixture_weight_prior'][arm], unif_samples=False)
 
-            bound = ut.compute_policy_loss(300, config['bound'], config['alpha'], logps,
-                                                 logfactor, logq)
+                bound = ut.compute_policy_loss(config['mc_samples'], config['bound'], alpha, logps,
+                                                     logfactor, logq)
 
-            bounds.append(bound.detach().item())
+                bounds.append(bound.detach().item())
 
-        data['bound_'+str(i)] = bounds
-        i += 1
-        print(i/len(means)*100,"%")
+            data['bound_'+str(i)] = bounds
+            i += 1
+            print("alpha", alpha, i/len(means)*100,"%")
 
-    data.to_csv(dirname+'/contour' + '.csv')
+        data.to_csv(dirname+'/contour_'+str(alpha) + '.csv')
     return
 
 
