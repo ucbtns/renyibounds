@@ -18,22 +18,22 @@ from torch.distributions.normal import Normal
 import torch.distributions as D
 import math
 
-def_config = {'learning_rate': 1e-1,
+def_config = {'learning_rate': 5e-2,
               'bound': 'Renyi',
               'alpha': 2,
               'num_iters': 10000,
               'prior_q': 25,
               'sigma_q': 1e-8,
-              'prior_mu1': [10, 10, 10],
+              'prior_mu1': [13, 16, 10],
               'prior_sigma1': [1.5, 1.5, 1.5],
-              'prior_mu2': [17, 10, 17],
+              'prior_mu2': [20, 14, 17],
               'prior_sigma2': [1.5, 1.5, 1.5],
               'mixture_weight_prior': [0.5, 0.5, 0.5],
-              'gen_proc_mode1': [10, 12, 12.5],
-              'gen_proc_mode2': [20, 12, 14.5],
-              'gen_proc_std1': [1, 2, 1],
-              'gen_proc_std2': [1, 2, 1],
-              'mixture_weight_gen_proc': [0.98, 1.0, 0.5],
+              'gen_proc_mode1': [10, 16, 18],
+              'gen_proc_mode2': [22, 16, 10],
+              'gen_proc_std1': [1, 3, 1],
+              'gen_proc_std2': [1, 3, 1],
+              'mixture_weight_gen_proc': [0.97, 1.0, 0.97],
               'num_obs': 1000,
               'mc_samples': 300,
               'save_distributions': True,
@@ -63,15 +63,6 @@ def generate_obs(num_obs, gen_proc_mode1, gen_proc_std1, gen_proc_mode2, gen_pro
         reward = w*y1 + (1-w)*y2
         obs.append(reward.item())
     return obs
-
-oracle = []
-for arm in range(0, 3):
-    obs = generate_obs(1000, config['gen_proc_mode1'][arm], config['gen_proc_std1'][arm],
-                       config['gen_proc_mode2'][arm], config['gen_proc_std2'][arm],
-                       config['mixture_weight_gen_proc'][arm])
-    oracle.append(np.mean(obs)/np.var(obs))
-print("sharpe:", oracle)
-
 
 
 policy = []
@@ -133,15 +124,73 @@ for arm in range(0, 3):
     mean_from_samples = torch.mean(samples * posterior)
     var_from_samples = torch.mean((samples - mean_from_samples) ** 2 * posterior)
 
-    print("arm", arm, "post mean", mean_from_samples, "post var", var_from_samples, "post sharpe",
-          mean_from_samples / var_from_samples)
+    #print("arm", arm, "post mean", mean_from_samples, "post var", var_from_samples, "post sharpe",
+    #      mean_from_samples / var_from_samples)
 
     post_sharpe.append(mean_from_samples / var_from_samples)
 
-print("post_sharpe", post_sharpe)
+#print("post_sharpe", post_sharpe)
+
+
+def save_distributions():
+    for arm in range(0, 3):
+
+        params = nn.utils.parameters_to_vector(list(policy[arm].parameters())).to(device, non_blocking=True)
+        obs = generate_obs(config['num_obs'], config['gen_proc_mode1'][arm], config['gen_proc_std1'][arm],
+                       config['gen_proc_mode2'][arm], config['gen_proc_std2'][arm], config['mixture_weight_gen_proc'][arm])
+
+        logps, logfactor, logq, samples = compute_log_prob(obs, params, 1,
+                                                  config['prior_mu1'][arm], config['prior_mu2'][arm],
+                                                  config['prior_sigma1'][arm],
+                                                  config['prior_sigma2'][arm], config['mixture_weight_prior'][arm], unif_samples=True)
+
+        log_pso = logps + logfactor
+
+        int = torch.mean(torch.exp(log_pso))
+        #print("integral of p(s,o) for arm ", arm, ":", int)
+        #print("mean of arm", arm, "is", np.mean(obs), "var", np.var(obs), 'sharpe', np.mean(obs)/np.var(obs))
+
+        np.save(dirname+'/samples_arm_'+str(arm),np.array(samples))
+
+        ps = torch.exp(logps)
+        np.save(dirname+'/ps_arm_'+str(arm),np.array(ps))
+
+        pos = torch.exp(logfactor)
+        np.save(dirname+'/pos_arm_'+str(arm),np.array(pos))
+
+        pso = torch.exp(log_pso)
+        np.save(dirname+'/pso_arm_'+str(arm),np.array(pso))
+
+        np.save(dirname+'/rew_arm_'+str(arm),np.array(obs))
+
+        posterior = np.multiply(np.exp(log_pso), 1/int)
+
+        mean_from_samples = torch.mean(samples * posterior)
+        var_from_samples = torch.mean((samples-mean_from_samples)**2 * posterior)
+
+        print("arm", arm, "mean", np.mean(obs), "post mean", mean_from_samples.item(), "var", np.var(obs), "post var",
+              var_from_samples.item(),  'sharpe', np.mean(obs)/np.var(obs), "post sharpe", mean_from_samples.item()/var_from_samples.item())
+    return
+
+
+# Save logp for each arm
+if config['save_distributions']:
+    save_distributions()
+
+
 
 
 def learn(policy):
+    oracle = []
+    for arm in range(0, 3):
+        obs = generate_obs(10000, config['gen_proc_mode1'][arm], config['gen_proc_std1'][arm],
+                           config['gen_proc_mode2'][arm], config['gen_proc_std2'][arm],
+                           config['mixture_weight_gen_proc'][arm])
+        oracle.append(np.mean(obs) / np.var(obs))
+    print("sharpe:", oracle)
+
+
+
     obs = [[], [], []]
     rews = []
     arms_pulled = [0,0,0]
@@ -224,7 +273,7 @@ def learn(policy):
                 if iter > 2:
 
                     print("iter", iter, "bounds", bounds, "avg regret",
-                          np.max(post_sharpe)-(np.mean(rews)/np.var(rews)),
+                          np.max(oracle) - np.mean(rews)/np.var(rews), 'sharpe', np.mean(rews)/np.var(rews),
                           "mus", [mu1,mu2,mu3], "frac_arm_pulled", arms_pulled,
                         "Sigmas", [sigma1, sigma2, sigma3])
 
@@ -319,48 +368,4 @@ def generate_contour():
 if config['generate_contour']:
     generate_contour()
 
-
-def save_distributions():
-    for arm in range(0, 3):
-
-        params = nn.utils.parameters_to_vector(list(policy[arm].parameters())).to(device, non_blocking=True)
-        obs = generate_obs(config['num_obs'], config['gen_proc_mode1'][arm], config['gen_proc_std1'][arm],
-                       config['gen_proc_mode2'][arm], config['gen_proc_std2'][arm], config['mixture_weight_gen_proc'][arm])
-
-        logps, logfactor, logq, samples = compute_log_prob(obs, params, 1,
-                                                  config['prior_mu1'][arm], config['prior_mu2'][arm],
-                                                  config['prior_sigma1'][arm],
-                                                  config['prior_sigma2'][arm], config['mixture_weight_prior'][arm], unif_samples=True)
-
-        log_pso = logps + logfactor
-
-        int = torch.mean(torch.exp(log_pso))
-        print("integral of p(s,o) for arm ", arm, ":", int)
-        print("mean of arm", arm, "is", np.mean(obs), "var", np.var(obs), 'sharpe', np.mean(obs)/np.var(obs))
-
-        np.save(dirname+'/samples_arm_'+str(arm),np.array(samples))
-
-        ps = torch.exp(logps)
-        np.save(dirname+'/ps_arm_'+str(arm),np.array(ps))
-
-        pos = torch.exp(logfactor)
-        np.save(dirname+'/pos_arm_'+str(arm),np.array(pos))
-
-        pso = torch.exp(log_pso)
-        np.save(dirname+'/pso_arm_'+str(arm),np.array(pso))
-
-        np.save(dirname+'/rew_arm_'+str(arm),np.array(obs))
-
-        posterior = np.multiply(np.exp(log_pso), 1/int)
-
-        mean_from_samples = torch.mean(samples * posterior)
-        var_from_samples = torch.mean((samples-mean_from_samples)**2 * posterior)
-
-        print("arm", arm, "post mean", mean_from_samples, "post var", var_from_samples, "post sharpe", mean_from_samples/var_from_samples)
-    return
-
-
-# Save logp for each arm
-if config['save_distributions']:
-    save_distributions()
 
