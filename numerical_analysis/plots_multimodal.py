@@ -22,16 +22,16 @@ def_config = {'learning_rate': 1e-1,
               'num_iters': 10000,
               'prior_q': 25,
               'sigma_q': 1.0,
-              'prior_mu1': [10, 10, 10],
+              'prior_mu1': [13, 16, 10],
               'prior_sigma1': [1.5, 1.5, 1.5],
-              'prior_mu2': [17, 17, 17],
+              'prior_mu2': [20, 14, 17],
               'prior_sigma2': [1.5, 1.5, 1.5],
               'mixture_weight_prior': [0.5, 0.5, 0.5],
-              'gen_proc_mode1': [10, 12, 12.5],
-              'gen_proc_mode2': [20, 12, 14.5],
-              'gen_proc_std1': [1, 0.5, 0.3],
-              'gen_proc_std2': [1, 0.5, 0.3],
-              'mixture_weight_gen_proc': [0.8, 1.0, 0.5],
+              'gen_proc_mode1': [10, 16, 18],
+              'gen_proc_mode2': [22, 16, 10],
+              'gen_proc_std1': [1, 3, 1],
+              'gen_proc_std2': [1, 3, 1],
+              'mixture_weight_gen_proc': [0.97, 1.0, 0.97],
               'num_obs': 1000,
               'mc_samples': 1000,
               'save_distributions': True,
@@ -137,11 +137,12 @@ if config['save_distributions']:
 
 
 def generate_contour():
-    alphas = [1e-6, 0.5, 0.99, 1.01, 2, 1e6]
+    alphas = [1e-6, 0.5, 0.99999, 2, 10, 1e9]
+    #alphas = [10]
 
     arm=0
-    means = np.arange(0.0, 26.0, 0.2)
-    sigmas = np.arange(0.001, 5.0, 0.2)
+    means = np.arange(7.0, 25.0, 0.05)
+    sigmas = np.arange(0.001, 2.5, 0.05)
     obs = generate_obs(config['num_obs'], config['gen_proc_mode1'][arm], config['gen_proc_std1'][arm],
                        config['gen_proc_mode2'][arm], config['gen_proc_std2'][arm],
                        config['mixture_weight_gen_proc'][arm])

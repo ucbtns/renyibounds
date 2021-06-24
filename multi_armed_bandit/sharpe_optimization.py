@@ -20,7 +20,7 @@ import math
 
 def_config = {'learning_rate': 5e-2,
               'bound': 'Renyi',
-              'alpha': 2,
+              'alpha': 0.99999,
               'num_iters': 10000,
               'prior_q': 25,
               'sigma_q': 1e-8,
@@ -248,7 +248,7 @@ def learn(policy):
             sigma2 = torch.exp(p2[1]).detach().item()
             sigma3 = torch.exp(p3[1]).detach().item()
 
-            def evaluate_bound():
+            def evaluate():
                 bounds = []
 
                 for arm in range(0, 3):
@@ -265,10 +265,25 @@ def learn(policy):
                                                              logfactor, logq)
                         bounds.append(bound.detach().item())
 
+                obs_ev = []
+                for _ in range(1000):
+                    with torch.no_grad():
+
+                        arm = pull_arm(policy)
+
+                        # print(arm)
+                        rew = generate_obs(1, config['gen_proc_mode1'][arm], config['gen_proc_std1'][arm],
+                                           config['gen_proc_mode2'][arm], config['gen_proc_std2'][arm],
+                                           config['mixture_weight_gen_proc'][arm])[0]
+                        obs_ev.append(rew)
+                wandb.log({'sharpe_eval': np.mean(obs_ev)/np.var(obs_ev),
+                           'regret_eval': np.max(oracle) - np.mean(obs_ev)/np.var(obs_ev)})
+
+
 
                 return bounds
 
-            bounds = evaluate_bound()
+            bounds = evaluate()
             if config['print_log']:
                 if iter > 2:
 
@@ -302,13 +317,13 @@ def learn(policy):
                    'frac_arm3': frac_arm3,
                    'iter2': iter})
 
-            arms_pulled = [0,0,0]
-
-        if iter % config['log_reg_every'] == 0:
             if iter > 2:
-                wandb.log({'avg_regret': 13.5 - np.mean(rews), 'iter3': iter})
+                wandb.log({'avg regret': np.max(oracle) - np.mean(rews) / np.var(rews),
+                       'sharpe': np.mean(rews) / np.var(rews),})
 
-                rews = []
+
+            arms_pulled = [0,0,0]
+            rews = []
 
 
 def pull_arm(policy):
