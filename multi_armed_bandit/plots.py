@@ -42,21 +42,21 @@ labels = [r'$\alpha \rightarrow +\infty$',r'$\alpha = 10$', r'$\alpha = 2$', r'$
             r'$\alpha = 0.5$', r'$\alpha \rightarrow 0^+$']
 
 n = 3
-f, axes = plt.subplots(n, 2, figsize=(20,15))
+f, axes = plt.subplots(2, 3, figsize=(20,15))
 
 for it in range(len(mus)):
     
-    axes[it%n, it//n].scatter(samples0, np.multiply(pso0, 1/0.0528), color='black', label='s')       
+    axes[it//n, it%n].scatter(samples0, np.multiply(pso0, 1/0.0528), color='black', label='s')       
     sns.distplot(data['col_'+str(it)], hist = False, kde = True,
                      kde_kws = {'shade': True, 'linewidth': 2}, 
-                      label = labels[it],ax=axes[it%n, it//n], color='orange')
+                      label = labels[it],ax=axes[it//n, it%n], color='orange')
     sns.distplot([1], hist = False, kde = True,
                      kde_kws = {'shade': True, 'linewidth': 2}, 
-                      label = 'True posterior', color='black',ax=axes[it%n, it//n])    
-    axes[it%n, it//n].set_xlim([0,25])
-    axes[it%n, it//n].set( ylabel=r'$q(s)$', xlabel=labels[it])
+                      label = 'True posterior', color='black',ax=axes[it//n, it%n])    
+    axes[it//n, it%n].set_xlim([0,25])
+    axes[it//n, it%n].set( ylabel=r'$q(s)$', xlabel=labels[it])
 
     if it == 0:
-        axes[it%n, it//n].legend(['True posterior','Variational posterior'], loc='upper left')
+        axes[it//n, it%n].legend(['True posterior','Variational posterior'], loc='upper left')
 f.savefig('posterior.pdf')    
     
