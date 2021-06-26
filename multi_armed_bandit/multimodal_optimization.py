@@ -43,7 +43,6 @@ def_config = {'learning_rate': 2e-2,
               'num_updates': 10,
               'log_reg_every': 50,
               'print_log': True,
-              'generate_contour': False,
               }
 
 dirname = os.path.dirname(__file__)
@@ -197,14 +196,8 @@ def learn(policy):
     for iter in range(config['num_iters']):
 
         # Sample each arm once at the beginning
-        if iter == 0 or iter == 1:
-            arm = 0
-        elif iter == 2 or iter == 3:
-                arm = 1
-        elif iter == 4 or iter == 5:
-            arm = 2
-        else:
-            arm = pull_arm(policy)
+        arm = 0
+
 
         #print(arm)
         rew = generate_obs(1, config['gen_proc_mode1'][arm], config['gen_proc_std1'][arm],
@@ -239,37 +232,31 @@ def learn(policy):
         # Log results
         if iter % config['log_every'] == 0:
             p1 = nn.utils.parameters_to_vector(list(policy[0].parameters())).to(device, non_blocking=True)
-            p2 = nn.utils.parameters_to_vector(list(policy[1].parameters())).to(device, non_blocking=True)
-            p3 = nn.utils.parameters_to_vector(list(policy[2].parameters())).to(device, non_blocking=True)
             mu1 = p1[0].detach().item()
-            mu2 = p2[0].detach().item()
-            mu3 = p3[0].detach().item()
             sigma1 = torch.exp(p1[1]).detach().item()
-            sigma2 = torch.exp(p2[1]).detach().item()
-            sigma3 = torch.exp(p3[1]).detach().item()
 
             def evaluate():
                 bounds = []
 
-                for arm in range(0, 3):
-                    with torch.no_grad():
-                        params = nn.utils.parameters_to_vector(list(policy[arm].parameters())).to(device, non_blocking=True)
+                arm = 0
+                with torch.no_grad():
+                    params = nn.utils.parameters_to_vector(list(policy[arm].parameters())).to(device, non_blocking=True)
 
-                        logps, logfactor, logq, samples = compute_log_prob(obs[arm], params, config['mc_samples'],
-                                                                           config['prior_mu1'][arm],
-                                                                           config['prior_mu2'][arm],
-                                                                           config['prior_sigma1'][arm],
-                                                                           config['prior_sigma2'][arm],
-                                                                           config['mixture_weight_prior'][arm])
-                        bound = ut.compute_policy_loss(config['mc_samples'], config['bound'], config['alpha'], logps,
-                                                             logfactor, logq)
-                        bounds.append(bound.detach().item())
+                    logps, logfactor, logq, samples = compute_log_prob(obs[arm], params, config['mc_samples'],
+                                                                       config['prior_mu1'][arm],
+                                                                       config['prior_mu2'][arm],
+                                                                       config['prior_sigma1'][arm],
+                                                                       config['prior_sigma2'][arm],
+                                                                       config['mixture_weight_prior'][arm])
+                    bound = ut.compute_policy_loss(config['mc_samples'], config['bound'], config['alpha'], logps,
+                                                         logfactor, logq)
+                    bounds.append(bound.detach().item())
 
                 obs_ev = []
                 for _ in range(1000):
                     with torch.no_grad():
 
-                        arm = pull_arm(policy)
+                        arm = 0
 
                         # print(arm)
                         rew = generate_obs(1, config['gen_proc_mode1'][arm], config['gen_proc_std1'][arm],
@@ -289,19 +276,14 @@ def learn(policy):
 
                     print("iter", iter, "bounds", bounds, "avg regret",
                           np.max(oracle) - np.mean(rews)/np.var(rews), 'sharpe', np.mean(rews)/np.var(rews),
-                          "mus", [mu1,mu2,mu3], "frac_arm_pulled", arms_pulled,
-                        "Sigmas", [sigma1, sigma2, sigma3])
+                          "mus", [mu1], "frac_arm_pulled", arms_pulled,
+                        "Sigmas", [sigma1])
 
 
             wandb.log({'mu1': mu1,
-                       'mu2': mu2,
-                       'mu3': mu3,
+
                        'sigma1': sigma1,
-                       'sigma2': sigma2,
-                       'sigma3': sigma3,
                        'bound1': bounds[0],
-                       'bound2': bounds[1],
-                       'bound3': bounds[2],
                        'iter': iter,
                        })
 
@@ -324,19 +306,6 @@ def learn(policy):
 
             arms_pulled = [0,0,0]
             rews = []
-
-
-def pull_arm(policy):
-    samples = []
-    with torch.no_grad():
-        for arm in range(0, 3):
-            params = nn.utils.parameters_to_vector(list(policy[arm].parameters())).to(device, non_blocking=True)
-            mu, log_var = params[0], params[1]
-            sigma = torch.exp(log_var)
-
-            samples.append(((torch.randn(1) * torch.sqrt(sigma) + mu)/sigma).item())
-    arm_pulled = np.argmax(samples)
-    return arm_pulled
 
 
 # Train
