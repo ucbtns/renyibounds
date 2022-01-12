@@ -183,7 +183,7 @@ if config['save_distributions']:
 def learn(policy):
     oracle = []
     for arm in range(0, 3):
-        obs = generate_obs(10000, config['gen_proc_mode1'][arm], config['gen_proc_std1'][arm],
+        obs = generate_obs(100000, config['gen_proc_mode1'][arm], config['gen_proc_std1'][arm],
                            config['gen_proc_mode2'][arm], config['gen_proc_std2'][arm],
                            config['mixture_weight_gen_proc'][arm])
         oracle.append(np.mean(obs) / np.var(obs))

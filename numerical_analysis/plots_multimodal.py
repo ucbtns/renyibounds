@@ -6,7 +6,7 @@ Created on Fri May 14 00:29:45 2021
 """
 
 import os
-from multi_armed_bandit import utils as ut
+import utils as ut
 import numpy as np
 import wandb
 import torch.optim as optim
@@ -141,8 +141,8 @@ def generate_contour():
     #alphas = [10]
 
     arm=0
-    means = np.arange(7.0, 25.0, 0.05)
-    sigmas = np.arange(0.001, 2.5, 0.05)
+    means = np.arange(7.0, 25.0, 0.2)
+    sigmas = np.arange(0.05, 3.5, 0.1)
     obs = generate_obs(config['num_obs'], config['gen_proc_mode1'][arm], config['gen_proc_std1'][arm],
                        config['gen_proc_mode2'][arm], config['gen_proc_std2'][arm],
                        config['mixture_weight_gen_proc'][arm])
@@ -156,7 +156,7 @@ def generate_contour():
         for mean in means:
             bounds = []
             for sigma in sigmas:
-                params = torch.cat((torch.as_tensor([mean], dtype=torch.float32), torch.as_tensor([sigma], dtype=torch.float32)), 0).detach()
+                params = torch.cat((torch.as_tensor([mean], dtype=torch.float32), torch.log(torch.as_tensor([sigma], dtype=torch.float32)**2)), 0).detach()
 
                # if unif_samples:
                #     samples = torch.arange(0.0, 30.0, 0.01)

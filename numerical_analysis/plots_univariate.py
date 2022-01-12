@@ -92,7 +92,7 @@ bp = 0.8
 bl = 0.8
 al = 0.8
 ap = 0.8
-lp = 1
+lp = 0.8
 ll = 0.01
 
 
@@ -202,9 +202,9 @@ def generate_contour_gamma_alphas():
 
 
 def generate_contour_alpha_p_muq():
-    alphas_p = np.arange(0.001, 5, 0.01)
+    alphas_p = np.arange(0.0001, 5, 0.002)
 
-    mu_q = np.arange(0.33, 0.45, 0.01)
+    mu_q = np.arange(0.33, 0.45, 0.001)
     import pandas as pd
 
     data = pd.DataFrame()
@@ -225,8 +225,8 @@ def generate_contour_alpha_p_muq():
 
 
 def generate_contour_beta_p_muq():
-    betas_p = np.arange(0.001, 1, 0.01)
-    mu_q = np.arange(0.33, 0.45, 0.01)
+    betas_p = np.arange(0.0001, 1, 0.002)
+    mu_q = np.arange(0.33, 0.45, 0.001)
     import pandas as pd
 
     data = pd.DataFrame()
@@ -248,7 +248,7 @@ def generate_contour_beta_p_muq():
 
 def generate_contour_alpha_muq():
 
-    alphas = np.arange(0.001, 10, 0.01)
+    alphas = np.arange(0.0001, 20, 0.02)
     mu_q = np.arange(0.33, 0.45, 0.001)
 
 
@@ -272,7 +272,7 @@ def generate_contour_alpha_muq():
 
 
 def generate_contour_alpha_p_sigmaq():
-    alphas_p = np.arange(0.001, 5, 0.01)
+    alphas_p = np.arange(0.0001, 5, 0.002)
     sigma_q = np.arange(0.00001, 0.002, 0.00001)
     import pandas as pd
 
@@ -295,7 +295,7 @@ def generate_contour_alpha_p_sigmaq():
 
 
 def generate_contour_beta_p_sigmaq():
-    betas_p = np.arange(0.001, 1, 0.01)
+    betas_p = np.arange(0.0001, 1, 0.002)
     sigma_q = np.arange(0.00001, 0.002, 0.00001)
     import pandas as pd
 
@@ -318,7 +318,7 @@ def generate_contour_beta_p_sigmaq():
 
 def generate_contour_alpha_sigmaq():
 
-    alphas = np.arange(0.001, 20, 0.04)
+    alphas = np.arange(0.0001, 20, 0.02)
     sigma_q = np.arange(0.00001, 0.002, 0.00001)
 
 
@@ -390,12 +390,12 @@ def generate_contour_alpha_p_beta_p_sigmaq_const_var():
 #plot_alpha()
 #plot_alpha_p()
 #generate_contour_gamma()
-#generate_contour_alpha_p_muq()
+generate_contour_alpha_p_muq()
 #generate_contour_gamma_alphas()
-#generate_contour_beta_p_muq()
-#generate_contour_alpha_muq()
-#generate_contour_alpha_p_sigmaq()
-#generate_contour_beta_p_sigmaq()
-#generate_contour_alpha_sigmaq()
+generate_contour_beta_p_muq()
+generate_contour_alpha_muq()
+generate_contour_alpha_p_sigmaq()
+generate_contour_beta_p_sigmaq()
+generate_contour_alpha_sigmaq()
 #generate_contour_alpha_p_beta_p_sigmaq_const_mean()
-generate_contour_alpha_p_beta_p_sigmaq_const_var()
+#generate_contour_alpha_p_beta_p_sigmaq_const_var()
