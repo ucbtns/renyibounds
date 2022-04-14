@@ -8,8 +8,8 @@ For pre-requisite, see requirements.txt
 ```
 python main.py --configs unisim 
 ```
-![mu](https://github.com/ucbtns/renyibounds/blob/main/figures/univ_muq.pdf)
-![sigma](https://github.com/ucbtns/renyibounds/blob/main/figures/univ_sigma_q.pdf)
+![mu](https://github.com/ucbtns/renyibounds/blob/main/figures/univ_muq.png)
+![sigma](https://github.com/ucbtns/renyibounds/blob/main/figures/univ_sigma_q.png)
 
 ## Multiarmed Bandits:
 
