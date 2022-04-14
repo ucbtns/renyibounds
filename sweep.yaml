@@ -1,14 +1,16 @@
  
-program: sharpe_optimization.py
+program: main.py --configs mabsim
 command:
   - ${env}
   - python3
   - ${program}
   - ${args}
+  
 method: grid
 metric:
   name: reward
   goal: maximize
+  
 parameters:
 
   alpha:
@@ -20,7 +22,6 @@ parameters:
       - 2
       - 10
       - 1e9
-
 
   run:
     distribution: categorical
@@ -48,14 +49,3 @@ parameters:
 
 
 
-
-  learning_rate:
-    distribution: categorical
-    values:
-      - 0.05
-
-
-  num_updates:
-    distribution: categorical
-    values:
-      - 10
