@@ -1,7 +1,7 @@
 # 🧠 Bayesian Brains and the Rényi Divergence
 We used the Renyi variational inference to evaluate differences in posterior estimates and agent behaviour.  
 
-For pre-requisite, see requirements.txt
+
 
 ## Numerical posterior estimation:
 
@@ -37,3 +37,6 @@ If you use this code please reference the accompanying [paper](https://watermark
     eprint = {https://direct.mit.edu/neco/article-pdf/34/4/829/2003077/neco\_a\_01484.pdf},
 }
 ```
+
+## Pre-requisite:
+See requirements.txt
