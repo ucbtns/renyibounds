@@ -138,7 +138,6 @@ if config['save_distributions']:
 
 def generate_contour():
     alphas = [1e-6, 0.5, 0.99999, 2, 10, 1e9]
-    #alphas = [10]
 
     arm=0
     means = np.arange(7.0, 25.0, 0.2)
@@ -171,8 +170,7 @@ def generate_contour():
                                                                    config['prior_sigma2'][arm],
                                                                    config['mixture_weight_prior'][arm], unif_samples=False)
 
-                bound = ut.compute_policy_loss(config['mc_samples'], config['bound'], alpha, logps,
-                                                     logfactor, logq)
+                bound = ut.compute_policy_loss(config['mc_samples'], alpha, logps, logfactor, logq)
 
                 bounds.append(bound.detach().item())
 

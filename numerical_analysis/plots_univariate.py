@@ -1,17 +1,16 @@
 # =============================================================================
-# @author: Noor Sajid
+# @author:
 # @purpose: Section 4.0 for the Renyi Bound paper
 # =============================================================================
 
 import numpy as np
 import math
 import matplotlib.pyplot as plt
-np.random.seed(1)
 
 nlg = lambda x: np.log(x)
-sigma_RB = lambda alpha, sp, sl, sq, x: ((1-alpha)*(1/sp +  x.T.dot(np.linalg.inv(sl)).dot(x)) + alpha/sq)**-1
+sigma_RB = lambda alpha, sp, sl, sq, x: ((1-alpha)*(1/sp + x.T.dot(np.linalg.inv(sl)).dot(x)) + alpha/sq)**-1
 mu_RB = lambda alpha, s, muq, sq, sl, y, x: s*(alpha*(1/sq)*muq + (1-alpha)*x.T.dot(np.linalg.inv(sl)).dot(y))
-sigma_KL = lambda sp, sl, sq, x: (1/sp +  x.T.dot(np.linalg.inv(sl)).dot(x) - 1/sq)**-1
+sigma_KL = lambda sp, sl, sq, x: (1/sp + x.T.dot(np.linalg.inv(sl)).dot(x) - 1/sq)**-1
 mu_KL = lambda s_kl, muq, sq, sl, y, x: s_kl*(-(1/sq)*muq + x.T.dot(np.linalg.inv(sl)).dot(y))
 
 
@@ -48,7 +47,7 @@ def KL_gamma(muq, sq, sl, sp, y, x, ap, bp, al, bl, lp, ll):
     s_kl = sigma_KL(sp, sl, sq, x)
     mu_kl = mu_KL(s_kl, muq, sq, sl, y, x)
 
-    tr1 = 0.5*nlg(sq / (sp * np.linalg.det(sl))) - 0.5 * y.shape[0] * nlg(((2 * np.pi)))
+    tr1 = 0.5*nlg(sq / (sp * np.linalg.det(sl))) - 0.5 * y.shape[0] * nlg(2 * np.pi)
 
     tr2 = - 0.5*(y.T.dot(np.linalg.inv(sl)).dot(y) - muq ** 2 / sq - mu_kl **2 / s_kl + (muq - mu_kl) ** 2 / s_kl)
 
@@ -80,7 +79,6 @@ def KL_gamma_partial(muq, sq, sl, sp, y, x, ap, bp, lp):
 # Simulation 1:
 # ===================================================
 
-
 x = np.arange(0,20,1.1).reshape(-1,1)
 sigma_l = np.identity(x.shape[0])*1
 y = np.random.multivariate_normal(0.4*x.ravel(), sigma_l)
@@ -94,7 +92,6 @@ al = 0.8
 ap = 0.8
 lp = 0.8
 ll = 0.01
-
 
 print("sigma_q must be less than ", 1/(1/sigma_p + x.T.dot(np.linalg.inv(sigma_l)).dot(x)))
 print("sigma_q:", sigma_q)
@@ -387,15 +384,9 @@ def generate_contour_alpha_p_beta_p_sigmaq_const_var():
 
 
 
-#plot_alpha()
-#plot_alpha_p()
-#generate_contour_gamma()
 generate_contour_alpha_p_muq()
-#generate_contour_gamma_alphas()
 generate_contour_beta_p_muq()
 generate_contour_alpha_muq()
 generate_contour_alpha_p_sigmaq()
 generate_contour_beta_p_sigmaq()
 generate_contour_alpha_sigmaq()
-#generate_contour_alpha_p_beta_p_sigmaq_const_mean()
-#generate_contour_alpha_p_beta_p_sigmaq_const_var()
