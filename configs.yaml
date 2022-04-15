@@ -1,7 +1,7 @@
 
 defaults:
 
-    wandb_key: '143ab19b3eb2d5d944a3df9ab5f408fda52bd963'
+    wandb_key: ''
     id: 'Renyi-v0'
     project: 'RB'
     userid: ''
